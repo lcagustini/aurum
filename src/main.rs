@@ -6,15 +6,15 @@ use sdl2::keyboard::Keycode;
 
 use std::io::prelude::*;
 
-const WINDOW_WIDTH: u32 = 800;
-const WINDOW_HEIGHT: u32 = 600;
-const BG_COLOR: Color = Color{r: 25, g: 25, b: 25, a: 255};
-
 macro_rules! rect(
     ($x:expr, $y:expr, $w:expr, $h:expr) => (
         sdl2::rect::Rect::new($x as i32, $y as i32, $w as u32, $h as u32)
     )
 );
+
+const WINDOW_WIDTH: u32 = 800;
+const WINDOW_HEIGHT: u32 = 600;
+const BG_COLOR: Color = Color{r: 25, g: 25, b: 25, a: 255};
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -48,10 +48,12 @@ fn main() {
             }
         }
 
-        let s = read_file("teste.txt");
+        let s = read_file("src/main.rs");
 
         let surface = font.render(&s).blended(Color::RGBA(255, 255, 255, 255)).unwrap();
-        let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
+        let mut cropped = sdl2::surface::Surface::new(WINDOW_WIDTH, WINDOW_HEIGHT, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
+        let _ = surface.blit(rect![0,0,WINDOW_WIDTH,WINDOW_HEIGHT], &mut cropped, rect![0,0,WINDOW_WIDTH,WINDOW_HEIGHT]);
+        let texture = texture_creator.create_texture_from_surface(&cropped).unwrap();
         let sdl2::render::TextureQuery { width, height, .. } = texture.query();
 
         canvas.clear();
