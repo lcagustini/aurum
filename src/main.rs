@@ -12,13 +12,70 @@ macro_rules! rect(($x:expr, $y:expr, $w:expr, $h:expr) => (sdl2::rect::Rect::new
 const WINDOW_WIDTH: u32 = 1200;
 const WINDOW_HEIGHT: u32 = 1000;
 const BG_COLOR: Color = Color{r: 25, g: 25, b: 25, a: 255};
-const FONT_SIZE: u16 = 18;
+const FONT_SIZE: u16 = 20;
 
 struct Cursor<'r> {
     x: u32,
     y: u32,
     wanted_x: u32,
+    screen_y: u32,
     texture: sdl2::render::Texture<'r>,
+}
+impl<'r> Cursor<'r> {
+    fn new(x: u32, y: u32, texture_creator: &'r sdl2::render::TextureCreator<sdl2::video::WindowContext>) -> Cursor<'r> {
+        let mut cursor_surface = sdl2::surface::Surface::new((6*FONT_SIZE/10) as u32, FONT_SIZE as u32, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
+        cursor_surface.fill_rect(rect![0, 0, 4, FONT_SIZE], sdl2::pixels::Color::RGBA(255, 255, 255, 128)).unwrap();
+
+        Cursor{ x: x, y: y, wanted_x: x, screen_y: 0, texture: texture_creator.create_texture_from_surface(cursor_surface).unwrap() }
+    }
+
+    fn up(&mut self, text: &Vec<String>) {
+        if self.y > 0 {
+            self.y -= 1;
+            self.x = if self.wanted_x > text[self.get_absolute_cursor()].len() as u32 {
+                text[self.get_absolute_cursor()].len() as u32
+            }
+            else {
+                self.wanted_x
+            };
+        }
+    }
+
+    fn down(&mut self, text: &Vec<String>) {
+        if self.y < (text.len() as u32)-1 && self.y < (WINDOW_HEIGHT/FONT_SIZE as u32)-1 {
+            self.y += 1;
+            self.x = if self.wanted_x > text[self.get_absolute_cursor()].len() as u32 {
+                text[self.get_absolute_cursor()].len() as u32
+            }
+            else {
+                self.wanted_x
+            };
+        }
+    }
+
+    fn left(&mut self, text: &Vec<String>) {
+        if self.x > 0 {
+            self.x -= 1;
+            while !text[self.get_absolute_cursor()].is_char_boundary(self.x as usize) {
+                self.x -= 1;
+            }
+            self.wanted_x = self.x;
+        }
+    }
+
+    fn right(&mut self, text: &Vec<String>) {
+        if self.x < text[self.get_absolute_cursor()].len() as u32 {
+            self.x += 1;
+            while !text[self.get_absolute_cursor()].is_char_boundary(self.x as usize) {
+                self.x += 1;
+            }
+            self.wanted_x = self.x;
+        }
+    }
+
+    fn get_absolute_cursor(&self) -> usize {
+        (self.y + self.screen_y) as usize
+    }
 }
 
 fn main() {
@@ -39,13 +96,9 @@ fn main() {
     let mut font = ttf_context.load_font("roboto.ttf", FONT_SIZE).unwrap();
     font.set_style(sdl2::ttf::STYLE_NORMAL);
 
-    let mut cursor_surface = sdl2::surface::Surface::new((6*FONT_SIZE/10) as u32, FONT_SIZE as u32, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
-    cursor_surface.fill_rect(rect![0, 0, 4, FONT_SIZE], sdl2::pixels::Color::RGBA(255, 255, 255, 128)).unwrap();
-
-    let mut cursor = Cursor{ x: 0, y: 0, wanted_x: 0, texture: texture_creator.create_texture_from_surface(cursor_surface).unwrap() };
-
     canvas.set_draw_color(BG_COLOR);
 
+    let mut cursor = Cursor::new(0, 0, &texture_creator);
     let mut lines: Vec<String> = read_file(&args[1]).split("\n").map(|x| x.to_owned()).collect();
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
@@ -57,50 +110,25 @@ fn main() {
                     break 'running
                 },
                 Event::KeyDown { keycode: Some(Keycode::Left), .. } => {
-                    if cursor.x > 0 {
-                        cursor.x -= 1;
-                        while !lines[cursor.y as usize].is_char_boundary(cursor.x as usize) {
-                            cursor.x -= 1;
-                        }
-                        cursor.wanted_x = cursor.x;
-                    }
+                    cursor.left(&lines);
                 },
                 Event::KeyDown { keycode: Some(Keycode::Right), .. } => {
-                    if cursor.x < lines[cursor.y as usize].len() as u32 {
-                        cursor.x += 1;
-                        while !lines[cursor.y as usize].is_char_boundary(cursor.x as usize) {
-                            cursor.x += 1;
-                        }
-                        cursor.wanted_x = cursor.x;
-                    }
+                    cursor.right(&lines);
                 },
                 Event::KeyDown { keycode: Some(Keycode::Up), .. } => {
-                    if cursor.y > 0 {
-                        cursor.y -= 1;
-                        cursor.x = if cursor.wanted_x > lines[cursor.y as usize].len() as u32 {
-                            lines[cursor.y as usize].len() as u32
-                        }
-                        else {
-                            cursor.wanted_x
-                        }
-                    }
+                    cursor.up(&lines);
                 },
                 Event::KeyDown { keycode: Some(Keycode::Down), .. } => {
-                    if cursor.y < (lines.len() as u32)-1 {
-                        cursor.y += 1;
-                        cursor.x = if cursor.wanted_x > lines[cursor.y as usize].len() as u32 {
-                            lines[cursor.y as usize].len() as u32
-                        }
-                        else {
-                            cursor.wanted_x
-                        }
-                    }
+                    cursor.down(&lines);
                 },
                 Event::KeyDown { keycode: Some(Keycode::Return), .. } => {
-                    lines[cursor.y as usize].insert_str(cursor.x as usize, "\n");
-                    let halves: Vec<String> = lines[cursor.y as usize].split("\n").map(|x| x.to_owned()).collect();
-                    lines[cursor.y as usize] = halves[0].clone();
-                    lines.insert((cursor.y+1) as usize, halves[1].clone());
+                    lines[cursor.get_absolute_cursor()].insert_str(cursor.x as usize, "\n");
+
+                    let halves: Vec<String> = lines[cursor.get_absolute_cursor()].split("\n").map(|x| x.to_owned()).collect();
+
+                    lines[cursor.get_absolute_cursor()] = halves[0].clone();
+
+                    lines.insert((cursor.get_absolute_cursor()+1) as usize, halves[1].clone());
 
                     cursor.x = 0;
                     cursor.wanted_x = 0;
@@ -108,47 +136,85 @@ fn main() {
                 },
                 Event::KeyDown { keycode: Some(Keycode::Backspace), .. } => {
                     if cursor.x > 0 {
-                        cursor.x -= 1;
-                        while !lines[cursor.y as usize].is_char_boundary(cursor.x as usize) {
-                            cursor.x -= 1;
+                        cursor.left(&lines);
+                        lines[cursor.get_absolute_cursor()].remove(cursor.x as usize);
+                    }
+                    else if cursor.x == 0 && cursor.get_absolute_cursor() > 0 {
+                        let line = lines[cursor.get_absolute_cursor()].clone();
+
+                        cursor.x = lines[cursor.get_absolute_cursor()-1].len() as u32;
+                        cursor.wanted_x = cursor.x;
+
+                        lines[cursor.get_absolute_cursor()-1].push_str(&line);
+
+                        lines.remove(cursor.get_absolute_cursor());
+
+                        if cursor.y == 0 {
+                            cursor.screen_y -= 1;
                         }
-                        lines[cursor.y as usize].remove(cursor.x as usize);
+                        else {
+                            cursor.y -= 1;
+                        }
                     }
                 },
                 Event::KeyDown { keycode: Some(Keycode::F5), .. } => {
                     save_file(&args[1], &lines);
                 },
                 Event::TextInput { text: input, .. } => {
-                    lines[cursor.y as usize].insert_str(cursor.x as usize, &input);
+                    lines[cursor.get_absolute_cursor()].insert_str(cursor.x as usize, &input);
                     cursor.x += input.len() as u32;
+                },
+                Event::MouseWheel { y: dir, .. } => {
+                    if (cursor.screen_y > 0 && dir > 0) || (cursor.screen_y < (lines.len()-1) as u32 && dir < 0) {
+                        cursor.screen_y = if dir > 0 { cursor.screen_y - 1 } else { cursor.screen_y + 1 };
+                        if (cursor.y > 0 && dir < 0) || (cursor.y < (WINDOW_HEIGHT/FONT_SIZE as u32)-1 && dir > 0) {
+                            if dir > 0 {
+                                cursor.down(&lines);
+                            }
+                            else {
+                                cursor.up(&lines);
+                            };
+                        }
+                        else {
+                            cursor.x = if cursor.wanted_x > lines[cursor.get_absolute_cursor()].len() as u32 {
+                                lines[cursor.get_absolute_cursor()].len() as u32
+                            }
+                            else {
+                                cursor.wanted_x
+                            };
+                        }
+                    }
                 },
                 _ => {}
             }
         }
 
         canvas.clear();
-        for (i, l) in lines.iter().enumerate() {
-            let surface = match font.render(&l).blended(Color::RGBA(255, 255, 255, 255)) {
+        for i in cursor.screen_y..(lines.len() as u32) {
+            let with_line_number = format!["{:n$} {}", i, lines[i as usize], n = number_of_digits(lines.len())];
+            let surface = match font.render(&with_line_number).blended(Color::RGBA(255, 255, 255, 255)) {
                 Ok(s) => s,
                 Err(_) => continue,
             };
             let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
             let sdl2::render::TextureQuery { width, height, .. } = texture.query();
 
-            let y = FONT_SIZE*(i as u16);
+            let y = FONT_SIZE*((i-cursor.screen_y) as u16);
             canvas.copy(&texture, None, Some(rect![0, y, width, height])).unwrap();
             if y >= (WINDOW_HEIGHT as u16) {
                 break
             }
         }
-        let (half, _) = lines[cursor.y as usize].split_at(cursor.x as usize);
+        let line_number = format!["{:n$} ", cursor.get_absolute_cursor(), n = number_of_digits(lines.len())];
+        let (line_number_x, _) = font.size_of(&line_number).unwrap();
+        let (half, _) = lines[cursor.get_absolute_cursor()].split_at(cursor.x as usize);
         let (x, _) = font.size_of(half).unwrap();
-        canvas.copy(&cursor.texture, None, Some(rect![x, cursor.y*(FONT_SIZE as u32), 4, FONT_SIZE])).unwrap();
+        canvas.copy(&cursor.texture, None, Some(rect![x+line_number_x, cursor.y*(FONT_SIZE as u32), 4, FONT_SIZE])).unwrap();
 
         canvas.present();
 
         let frame_time = std::time::Instant::now().duration_since(begin_loop_instant);
-        //println!["FPS: {}", 1_000_000_000/frame_time.subsec_nanos()];
+        println!["FPS: {}", 1_000_000_000/frame_time.subsec_nanos()];
     }
 }
 
@@ -174,4 +240,14 @@ fn save_file(path: &str, buffer: &Vec<String>) {
         Ok(_) => {},
         Err(e) => println!["{}", e],
     }
+}
+
+fn number_of_digits(n: usize) -> usize {
+    let mut i = 0;
+    let mut n = n;
+    while(n != 0) {
+        n /= 10;
+        i += 1;
+    }
+    i
 }
