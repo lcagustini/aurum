@@ -115,6 +115,9 @@ fn main() {
                         lines[cursor.y as usize].remove(cursor.x as usize);
                     }
                 },
+                Event::KeyDown { keycode: Some(Keycode::F5), .. } => {
+                    save_file(&args[1], &lines);
+                },
                 Event::TextInput { text: input, .. } => {
                     lines[cursor.y as usize].insert_str(cursor.x as usize, &input);
                     cursor.x += input.len() as u32;
@@ -157,3 +160,18 @@ fn read_file(path: &str) -> String {
     s
 }
 
+fn save_file(path: &str, buffer: &Vec<String>) {
+    let mut file = std::fs::File::create(path).unwrap();
+    let mut s = String::new();
+
+    for l in buffer.iter() {
+        s.push_str(l);
+        s.push_str("\n");
+    }
+
+    let result = file.write(&s.into_bytes());
+    match result {
+        Ok(_) => {},
+        Err(e) => println!["{}", e],
+    }
+}
