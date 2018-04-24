@@ -17,25 +17,46 @@ const FONT_SIZE: u16 = 20;
 struct Text<'ttf, 'a> {
     font: sdl2::ttf::Font<'ttf, 'a>,
     rendered: Option<Vec<sdl2::render::Texture<'a>>>,
+    lines_rendered: Option<Vec<sdl2::render::Texture<'a>>>,
     raw: Vec<String>,
 }
 impl<'ttf, 'a> Text<'ttf, 'a> {
     fn new(font: sdl2::ttf::Font<'ttf, 'a>, raw: Vec<String>) -> Text<'ttf, 'a> {
-        Text { font: font, rendered: None, raw: raw }
+        Text { font: font, rendered: None, lines_rendered: None, raw: raw }
     }
 
     fn render_text(&mut self, texture_creator: &'a sdl2::render::TextureCreator<sdl2::video::WindowContext>) {
         let mut rendered: Vec<sdl2::render::Texture> = Vec::new();
+        let mut lines_rendered: Vec<sdl2::render::Texture> = Vec::new();
 
         for i in 0..self.raw.len() {
-            let with_line_number = format!["{:n$} {}", i+1, self.raw[i as usize], n = number_of_digits(self.raw.len())];
-            let surface = self.font.render(&with_line_number).blended(Color::RGBA(255, 255, 255, 255)).unwrap();
-            let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
+            let line_number = format!["{:1$} ", i+1, number_of_digits(self.raw.len())];
+            let line = &self.raw[i as usize];
 
-            rendered.push(texture);
+            {
+                self.font.set_style(sdl2::ttf::STYLE_NORMAL);
+
+                let surface = if line.len() == 0 { 
+                    self.font.render(" ").blended(Color::RGBA(255, 255, 255, 255)).unwrap()
+                }
+                else {
+                    self.font.render(&line).blended(Color::RGBA(255, 255, 255, 255)).unwrap()
+                };
+                let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
+
+                rendered.push(texture);
+            }{
+                self.font.set_style(sdl2::ttf::STYLE_BOLD);
+
+                let surface = self.font.render(&line_number).blended(Color::RGBA(255, 255, 255, 255)).unwrap();
+                let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
+
+                lines_rendered.push(texture);
+            }
         }
 
         self.rendered = Some(rendered);
+        self.lines_rendered = Some(lines_rendered);
     }
 }
 
@@ -238,23 +259,33 @@ fn main() {
         canvas.clear();
         match text.rendered {
             Some(ref rendered) => {
-                for i in cursor.screen_y..(text.raw.len() as u32) {
-                    let texture = &rendered[i as usize];
-                    let sdl2::render::TextureQuery { width, height, .. } = texture.query();
+                match text.lines_rendered {
+                    Some(ref lines_rendered) => {
+                        for i in cursor.screen_y..(text.raw.len() as u32) {
+                            let texture = &rendered[i as usize];
+                            let line_texture = &lines_rendered[i as usize];
 
-                    let y = FONT_SIZE*((i-cursor.screen_y) as u16);
-                    canvas.copy(&texture, None, Some(rect![0, y, width, height])).unwrap();
-                    if y >= (WINDOW_HEIGHT as u16) {
-                        break
-                    }
-                }
-                let line_number = format!["{:n$} ", cursor.get_absolute_y()+1, n = number_of_digits(text.raw.len())];
-                let (line_number_x, _) = text.font.size_of(&line_number).unwrap();
-                let (half, _) = text.raw[cursor.get_absolute_y()].split_at(cursor.x as usize);
-                let (x, _) = text.font.size_of(half).unwrap();
-                canvas.copy(&cursor.texture, None, Some(rect![x+line_number_x, cursor.y*(FONT_SIZE as u32), 4, FONT_SIZE])).unwrap();
+                            let texture_info = texture.query();
+                            let line_texture_info = line_texture.query();
+
+                            let y = FONT_SIZE*((i-cursor.screen_y) as u16);
+                            canvas.copy(&line_texture, None, Some(rect![0, y, line_texture_info.width, line_texture_info.height])).unwrap();
+                            canvas.copy(&texture, None, Some(rect![line_texture_info.width, y, texture_info.width, texture_info.height])).unwrap();
+                            if y >= (WINDOW_HEIGHT as u16) {
+                                break
+                            }
+                        }
+
+                        let line_number_info = &lines_rendered[cursor.get_absolute_y()].query();
+                        let (half, _) = text.raw[cursor.get_absolute_y()].split_at(cursor.x as usize);
+                        text.font.set_style(sdl2::ttf::STYLE_NORMAL);
+                        let (x, _) = text.font.size_of(half).unwrap();
+                        canvas.copy(&cursor.texture, None, Some(rect![x+line_number_info.width, cursor.y*(FONT_SIZE as u32), 4, FONT_SIZE])).unwrap();
+                    },
+                    _ => {},
+                };
             },
-            None => {},
+            _ => {},
         };
         canvas.present();
 
