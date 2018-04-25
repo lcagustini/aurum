@@ -36,7 +36,7 @@ impl<'ttf, 'a> Text<'ttf, 'a> {
             {
                 self.font.set_style(sdl2::ttf::STYLE_NORMAL);
 
-                let surface = if line.len() == 0 { 
+                let surface = if line.len() == 0 {
                     self.font.render(" ").blended(Color::RGBA(255, 255, 255, 255)).unwrap()
                 }
                 else {
@@ -75,7 +75,7 @@ impl<'r> Cursor<'r> {
         Cursor{ x: x, y: y, wanted_x: x, screen_y: 0, texture: texture_creator.create_texture_from_surface(cursor_surface).unwrap() }
     }
 
-    fn up(&mut self, text: &Vec<String>) {
+    fn up(&mut self, text: &Vec<String>, canvas: &sdl2::render::Canvas<sdl2::video::Window>) {
         if self.y > 0 {
             self.y -= 1;
             self.x = if self.wanted_x > text[self.get_absolute_y()].len() as u32 {
@@ -85,10 +85,14 @@ impl<'r> Cursor<'r> {
                 self.wanted_x
             };
         }
+        else if self.get_absolute_y() > 0 {
+            self.scroll_screen(canvas, text, 1);
+            self.up(text, canvas);
+        }
     }
 
-    fn down(&mut self, text: &Vec<String>) {
-        if self.get_absolute_y() < text.len()-1 && self.y < (WINDOW_HEIGHT/FONT_SIZE as u32)-1 {
+    fn down(&mut self, text: &Vec<String>, canvas: &sdl2::render::Canvas<sdl2::video::Window>) {
+        if self.get_absolute_y() < text.len()-1 && self.y < (canvas.window().size().1/FONT_SIZE as u32)-1 {
             self.y += 1;
             self.x = if self.wanted_x > text[self.get_absolute_y()].len() as u32 {
                 text[self.get_absolute_y()].len() as u32
@@ -96,6 +100,10 @@ impl<'r> Cursor<'r> {
             else {
                 self.wanted_x
             };
+        }
+        else if self.get_absolute_y() < text.len()-1 {
+            self.scroll_screen(canvas, text, -1);
+            self.down(text, canvas);
         }
     }
 
@@ -122,6 +130,28 @@ impl<'r> Cursor<'r> {
     fn get_absolute_y(&self) -> usize {
         (self.y + self.screen_y) as usize
     }
+
+    fn scroll_screen(&mut self, canvas: &sdl2::render::Canvas<sdl2::video::Window>, text: &Vec<String>, dir: i32) {
+        if (self.screen_y > 0 && dir > 0) || (self.screen_y < (text.len()-1) as u32 && dir < 0) {
+            self.screen_y = if dir > 0 { self.screen_y - 1 } else { self.screen_y + 1 };
+            if (self.y > 0 && dir < 0) || (self.y < (canvas.window().size().1/FONT_SIZE as u32)-1 && dir > 0) {
+                if dir > 0 {
+                    self.down(text, canvas);
+                }
+                else {
+                    self.up(text, canvas);
+                };
+            }
+            else {
+                self.x = if self.wanted_x > text[self.get_absolute_y()].len() as u32 {
+                    text[self.get_absolute_y()].len() as u32
+                }
+                else {
+                    self.wanted_x
+                };
+            }
+        }
+    }
 }
 
 fn main() {
@@ -134,6 +164,7 @@ fn main() {
     let window = video_subsystem.window("Aurum", WINDOW_WIDTH, WINDOW_HEIGHT)
         .position_centered()
         .allow_highdpi()
+        .resizable()
         .build()
         .unwrap();
 
@@ -170,11 +201,11 @@ fn main() {
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Up), .. } => {
-                    cursor.up(&text.raw);
+                    cursor.up(&text.raw, &canvas);
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Down), .. } => {
-                    cursor.down(&text.raw);
+                    cursor.down(&text.raw, &canvas);
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Return), .. } => {
@@ -231,25 +262,7 @@ fn main() {
                 },
 
                 Event::MouseWheel { y: dir, .. } => {
-                    if (cursor.screen_y > 0 && dir > 0) || (cursor.screen_y < (text.raw.len()-1) as u32 && dir < 0) {
-                        cursor.screen_y = if dir > 0 { cursor.screen_y - 1 } else { cursor.screen_y + 1 };
-                        if (cursor.y > 0 && dir < 0) || (cursor.y < (WINDOW_HEIGHT/FONT_SIZE as u32)-1 && dir > 0) {
-                            if dir > 0 {
-                                cursor.down(&text.raw);
-                            }
-                            else {
-                                cursor.up(&text.raw);
-                            };
-                        }
-                        else {
-                            cursor.x = if cursor.wanted_x > text.raw[cursor.get_absolute_y()].len() as u32 {
-                                text.raw[cursor.get_absolute_y()].len() as u32
-                            }
-                            else {
-                                cursor.wanted_x
-                            };
-                        }
-                    }
+                    cursor.scroll_screen(&canvas, &text.raw, dir);
                 },
 
                 _ => {}
@@ -271,7 +284,7 @@ fn main() {
                             let y = FONT_SIZE*((i-cursor.screen_y) as u16);
                             canvas.copy(&line_texture, None, Some(rect![0, y, line_texture_info.width, line_texture_info.height])).unwrap();
                             canvas.copy(&texture, None, Some(rect![line_texture_info.width, y, texture_info.width, texture_info.height])).unwrap();
-                            if y >= (WINDOW_HEIGHT as u16) {
+                            if y >= (canvas.window().size().1 as u16) {
                                 break
                             }
                         }
