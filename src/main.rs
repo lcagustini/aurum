@@ -58,6 +58,25 @@ impl<'ttf, 'a> Text<'ttf, 'a> {
         self.rendered = Some(rendered);
         self.lines_rendered = Some(lines_rendered);
     }
+
+    fn render_line(&mut self, line: usize, texture_creator: &'a sdl2::render::TextureCreator<sdl2::video::WindowContext>) {
+        let line_str = &self.raw[line];
+
+        self.font.set_style(sdl2::ttf::STYLE_NORMAL);
+
+        let surface = if line_str.len() == 0 {
+            self.font.render(" ").blended(Color::RGBA(255, 255, 255, 255)).unwrap()
+        }
+        else {
+            self.font.render(&line_str).blended(Color::RGBA(255, 255, 255, 255)).unwrap()
+        };
+        let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
+
+        match self.rendered {
+            Some(ref mut r) => r[line] = texture,
+            None => return,
+        };
+    }
 }
 
 struct Cursor<'r> {
@@ -228,6 +247,8 @@ fn main() {
                     if cursor.x > 0 {
                         cursor.left(&text.raw);
                         text.raw[cursor.get_absolute_y()].remove(cursor.x as usize);
+
+                        text.render_line(cursor.get_absolute_y(), &texture_creator);
                     }
                     else if cursor.x == 0 && cursor.get_absolute_y() > 0 {
                         let line = text.raw[cursor.get_absolute_y()].clone();
@@ -245,9 +266,9 @@ fn main() {
                         else {
                             cursor.y -= 1;
                         }
-                    }
 
-                    text.render_text(&texture_creator);
+                        text.render_text(&texture_creator);
+                    }
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::F5), .. } => {
@@ -258,7 +279,7 @@ fn main() {
                     text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, &input);
                     cursor.x += input.len() as u32;
 
-                    text.render_text(&texture_creator);
+                    text.render_line(cursor.get_absolute_y(), &texture_creator);
                 },
 
                 Event::MouseWheel { y: dir, .. } => {
