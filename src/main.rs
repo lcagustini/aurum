@@ -12,6 +12,7 @@ macro_rules! rect(($x:expr, $y:expr, $w:expr, $h:expr) => (sdl2::rect::Rect::new
 const WINDOW_WIDTH: u32 = 1200;
 const WINDOW_HEIGHT: u32 = 1000;
 const BG_COLOR: Color = Color{r: 25, g: 25, b: 25, a: 255};
+const BAR_COLOR: Color = Color{r: 255, g: 25, b: 25, a: 255};
 const FONT_SIZE: u16 = 20;
 
 struct Text<'ttf, 'a> {
@@ -111,7 +112,7 @@ impl<'r> Cursor<'r> {
     }
 
     fn down(&mut self, text: &Vec<String>, canvas: &sdl2::render::Canvas<sdl2::video::Window>) {
-        if self.get_absolute_y() < text.len()-1 && self.y < (canvas.window().size().1/FONT_SIZE as u32)-1 {
+        if self.get_absolute_y() < text.len()-1 && self.y < (canvas.window().size().1/FONT_SIZE as u32)-2 {
             self.y += 1;
             self.x = if self.wanted_x > text[self.get_absolute_y()].len() as u32 {
                 text[self.get_absolute_y()].len() as u32
@@ -153,7 +154,7 @@ impl<'r> Cursor<'r> {
     fn scroll_screen(&mut self, canvas: &sdl2::render::Canvas<sdl2::video::Window>, text: &Vec<String>, dir: i32) {
         if (self.screen_y > 0 && dir > 0) || (self.screen_y < (text.len()-1) as u32 && dir < 0) {
             self.screen_y = if dir > 0 { self.screen_y - 1 } else { self.screen_y + 1 };
-            if (self.y > 0 && dir < 0) || (self.y < (canvas.window().size().1/FONT_SIZE as u32)-1 && dir > 0) {
+            if (self.y > 0 && dir < 0) || (self.y < (canvas.window().size().1/FONT_SIZE as u32)-2 && dir > 0) {
                 if dir > 0 {
                     self.down(text, canvas);
                 }
@@ -305,7 +306,7 @@ fn main() {
                             let y = FONT_SIZE*((i-cursor.screen_y) as u16);
                             canvas.copy(&line_texture, None, Some(rect![0, y, line_texture_info.width, line_texture_info.height])).unwrap();
                             canvas.copy(&texture, None, Some(rect![line_texture_info.width, y, texture_info.width, texture_info.height])).unwrap();
-                            if y >= (canvas.window().size().1 as u16) {
+                            if y >= (canvas.window().size().1 as u16)-2*FONT_SIZE {
                                 break
                             }
                         }
@@ -321,6 +322,12 @@ fn main() {
             },
             _ => {},
         };
+
+        canvas.set_draw_color(BAR_COLOR);
+        let (w_width, w_height) = canvas.window().size();
+        let _ = canvas.fill_rect(rect![0, w_height - FONT_SIZE as u32, w_width, FONT_SIZE]);
+        canvas.set_draw_color(BG_COLOR);
+
         canvas.present();
 
         let frame_time = std::time::Instant::now().duration_since(begin_loop_instant);
