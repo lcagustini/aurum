@@ -1,14 +1,2 @@
-Foo bar
-Foo bar u
-Nao foobas
-Como foobas tu
-Ola tudo bem
-Ta funcionando uau
-Digit
-
-
-
-
-
-UHua
-Q gira
+Mas ta funcionando
+eba

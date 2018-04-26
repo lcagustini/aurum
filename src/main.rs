@@ -1,9 +1,13 @@
 extern crate sdl2;
+extern crate unicode_segmentation;
 
 use sdl2::pixels::Color;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 
+use unicode_segmentation::UnicodeSegmentation;
+
+use std::collections::HashMap;
 use std::io::prelude::*;
 use std::env;
 
@@ -20,10 +24,24 @@ struct Text<'ttf, 'a> {
     rendered: Option<Vec<sdl2::render::Texture<'a>>>,
     lines_rendered: Option<Vec<sdl2::render::Texture<'a>>>,
     raw: Vec<String>,
+    character_cache: HashMap<String, sdl2::render::Texture<'a>>
 }
 impl<'ttf, 'a> Text<'ttf, 'a> {
     fn new(font: sdl2::ttf::Font<'ttf, 'a>, raw: Vec<String>) -> Text<'ttf, 'a> {
-        Text { font: font, rendered: None, lines_rendered: None, raw: raw }
+        Text { font: font, rendered: None, lines_rendered: None, raw: raw, character_cache: HashMap::new() }
+    }
+
+    fn get_char(&mut self, character: &str, texture_creator: &'a sdl2::render::TextureCreator<sdl2::video::WindowContext>) -> &sdl2::render::Texture {
+        if !self.character_cache.contains_key(character) {
+            self.font.set_style(sdl2::ttf::STYLE_NORMAL);
+
+            let surface = self.font.render(character).blended(Color::RGBA(255, 255, 255, 255)).unwrap();
+            let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
+
+            self.character_cache.insert(character.to_owned(), texture);
+        }
+
+        self.character_cache.get(character).unwrap()
     }
 
     fn render_text(&mut self, texture_creator: &'a sdl2::render::TextureCreator<sdl2::video::WindowContext>) {
@@ -241,7 +259,7 @@ fn main() {
                     cursor.wanted_x = 0;
                     cursor.y += 1;
 
-                    text.render_text(&texture_creator);
+                    //text.render_text(&texture_creator);
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Backspace), .. } => {
@@ -268,7 +286,7 @@ fn main() {
                             cursor.y -= 1;
                         }
 
-                        text.render_text(&texture_creator);
+                        //text.render_text(&texture_creator);
                     }
                 },
 
@@ -280,7 +298,7 @@ fn main() {
                     text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, &input);
                     cursor.x += input.len() as u32;
 
-                    text.render_line(cursor.get_absolute_y(), &texture_creator);
+                    //text.render_line(cursor.get_absolute_y(), &texture_creator);
                 },
 
                 Event::MouseWheel { y: dir, .. } => {
@@ -292,6 +310,26 @@ fn main() {
         }
 
         canvas.clear();
+
+        for i in (cursor.screen_y as usize)..text.raw.len() {
+            let line = text.raw[i].clone();
+            let mut iter = line.graphemes(true);
+            let mut x = 0;
+            let y = FONT_SIZE*((i-cursor.screen_y as usize) as u16);
+
+            let mut c = iter.next();
+            while c != None {
+                let texture = text.get_char(c.unwrap(), &texture_creator);
+                let texture_info = texture.query();
+
+                canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
+                x += texture_info.width;
+
+                c = iter.next()
+            }
+        }
+
+        /*
         match text.rendered {
             Some(ref rendered) => {
                 match text.lines_rendered {
@@ -322,6 +360,7 @@ fn main() {
             },
             _ => {},
         };
+        */
 
         canvas.set_draw_color(BAR_COLOR);
         let (w_width, w_height) = canvas.window().size();
@@ -331,7 +370,7 @@ fn main() {
         canvas.present();
 
         let frame_time = std::time::Instant::now().duration_since(begin_loop_instant);
-        println!["FPS: {}", 1_000_000_000/frame_time.subsec_nanos()];
+        //println!["FPS: {}", 1_000_000_000/frame_time.subsec_nanos()];
     }
 }
 
