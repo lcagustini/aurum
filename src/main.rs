@@ -4,6 +4,8 @@ extern crate unicode_segmentation;
 use sdl2::pixels::Color;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
+use sdl2::render::{Texture, TextureCreator, Canvas};
+use sdl2::video::{Window, WindowContext};
 
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -21,80 +23,42 @@ const FONT_SIZE: u16 = 20;
 
 struct Text<'ttf, 'a> {
     font: sdl2::ttf::Font<'ttf, 'a>,
-    rendered: Option<Vec<sdl2::render::Texture<'a>>>,
-    lines_rendered: Option<Vec<sdl2::render::Texture<'a>>>,
     raw: Vec<String>,
-    character_cache: HashMap<String, sdl2::render::Texture<'a>>
+    normal_character_cache: HashMap<String, Texture<'a>>,
+    bold_character_cache: HashMap<String, Texture<'a>>,
+    needs_update: bool,
 }
 impl<'ttf, 'a> Text<'ttf, 'a> {
     fn new(font: sdl2::ttf::Font<'ttf, 'a>, raw: Vec<String>) -> Text<'ttf, 'a> {
-        Text { font: font, rendered: None, lines_rendered: None, raw: raw, character_cache: HashMap::new() }
+        Text { font: font, raw: raw, normal_character_cache: HashMap::new(), bold_character_cache: HashMap::new(), needs_update: true }
     }
 
-    fn get_char(&mut self, character: &str, texture_creator: &'a sdl2::render::TextureCreator<sdl2::video::WindowContext>) -> &sdl2::render::Texture {
-        if !self.character_cache.contains_key(character) {
+    fn get_bold_char(&mut self, character: &str, texture_creator: &'a TextureCreator<WindowContext>) -> &Texture {
+        if !self.bold_character_cache.contains_key(character) {
+            self.font.set_style(sdl2::ttf::STYLE_BOLD);
+
+            let surface = self.font.render(character).blended(Color::RGBA(255, 255, 255, 255)).unwrap();
+            let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
+
+            self.bold_character_cache.insert(character.to_owned(), texture);
+            println!["Cached bold {}", character];
+        }
+
+        self.bold_character_cache.get(character).unwrap()
+    }
+
+    fn get_normal_char(&mut self, character: &str, texture_creator: &'a TextureCreator<WindowContext>) -> &Texture {
+        if !self.normal_character_cache.contains_key(character) {
             self.font.set_style(sdl2::ttf::STYLE_NORMAL);
 
             let surface = self.font.render(character).blended(Color::RGBA(255, 255, 255, 255)).unwrap();
             let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
 
-            self.character_cache.insert(character.to_owned(), texture);
+            self.normal_character_cache.insert(character.to_owned(), texture);
+            println!["Cached normal {}", character];
         }
 
-        self.character_cache.get(character).unwrap()
-    }
-
-    fn render_text(&mut self, texture_creator: &'a sdl2::render::TextureCreator<sdl2::video::WindowContext>) {
-        let mut rendered: Vec<sdl2::render::Texture> = Vec::new();
-        let mut lines_rendered: Vec<sdl2::render::Texture> = Vec::new();
-
-        for i in 0..self.raw.len() {
-            let line_number = format!["{:1$} ", i+1, number_of_digits(self.raw.len())];
-            let line = &self.raw[i as usize];
-
-            {
-                self.font.set_style(sdl2::ttf::STYLE_NORMAL);
-
-                let surface = if line.len() == 0 {
-                    self.font.render(" ").blended(Color::RGBA(255, 255, 255, 255)).unwrap()
-                }
-                else {
-                    self.font.render(&line).blended(Color::RGBA(255, 255, 255, 255)).unwrap()
-                };
-                let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
-
-                rendered.push(texture);
-            }{
-                self.font.set_style(sdl2::ttf::STYLE_BOLD);
-
-                let surface = self.font.render(&line_number).blended(Color::RGBA(255, 255, 255, 255)).unwrap();
-                let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
-
-                lines_rendered.push(texture);
-            }
-        }
-
-        self.rendered = Some(rendered);
-        self.lines_rendered = Some(lines_rendered);
-    }
-
-    fn render_line(&mut self, line: usize, texture_creator: &'a sdl2::render::TextureCreator<sdl2::video::WindowContext>) {
-        let line_str = &self.raw[line];
-
-        self.font.set_style(sdl2::ttf::STYLE_NORMAL);
-
-        let surface = if line_str.len() == 0 {
-            self.font.render(" ").blended(Color::RGBA(255, 255, 255, 255)).unwrap()
-        }
-        else {
-            self.font.render(&line_str).blended(Color::RGBA(255, 255, 255, 255)).unwrap()
-        };
-        let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
-
-        match self.rendered {
-            Some(ref mut r) => r[line] = texture,
-            None => return,
-        };
+        self.normal_character_cache.get(character).unwrap()
     }
 }
 
@@ -103,17 +67,17 @@ struct Cursor<'r> {
     y: u32,
     wanted_x: u32,
     screen_y: u32,
-    texture: sdl2::render::Texture<'r>,
+    texture: Texture<'r>,
 }
 impl<'r> Cursor<'r> {
-    fn new(x: u32, y: u32, texture_creator: &'r sdl2::render::TextureCreator<sdl2::video::WindowContext>) -> Cursor<'r> {
+    fn new(x: u32, y: u32, texture_creator: &'r TextureCreator<WindowContext>) -> Cursor<'r> {
         let mut cursor_surface = sdl2::surface::Surface::new((6*FONT_SIZE/10) as u32, FONT_SIZE as u32, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
         cursor_surface.fill_rect(rect![0, 0, 4, FONT_SIZE], sdl2::pixels::Color::RGBA(255, 255, 255, 128)).unwrap();
 
         Cursor{ x: x, y: y, wanted_x: x, screen_y: 0, texture: texture_creator.create_texture_from_surface(cursor_surface).unwrap() }
     }
 
-    fn up(&mut self, text: &Vec<String>, canvas: &sdl2::render::Canvas<sdl2::video::Window>) {
+    fn up(&mut self, text: &Vec<String>, canvas: &Canvas<Window>) {
         if self.y > 0 {
             self.y -= 1;
             self.x = if self.wanted_x > text[self.get_absolute_y()].len() as u32 {
@@ -129,7 +93,7 @@ impl<'r> Cursor<'r> {
         }
     }
 
-    fn down(&mut self, text: &Vec<String>, canvas: &sdl2::render::Canvas<sdl2::video::Window>) {
+    fn down(&mut self, text: &Vec<String>, canvas: &Canvas<Window>) {
         if self.get_absolute_y() < text.len()-1 && self.y < (canvas.window().size().1/FONT_SIZE as u32)-2 {
             self.y += 1;
             self.x = if self.wanted_x > text[self.get_absolute_y()].len() as u32 {
@@ -169,7 +133,7 @@ impl<'r> Cursor<'r> {
         (self.y + self.screen_y) as usize
     }
 
-    fn scroll_screen(&mut self, canvas: &sdl2::render::Canvas<sdl2::video::Window>, text: &Vec<String>, dir: i32) {
+    fn scroll_screen(&mut self, canvas: &Canvas<Window>, text: &Vec<String>, dir: i32) {
         if (self.screen_y > 0 && dir > 0) || (self.screen_y < (text.len()-1) as u32 && dir < 0) {
             self.screen_y = if dir > 0 { self.screen_y - 1 } else { self.screen_y + 1 };
             if (self.y > 0 && dir < 0) || (self.y < (canvas.window().size().1/FONT_SIZE as u32)-2 && dir > 0) {
@@ -217,7 +181,7 @@ fn main() {
     canvas.set_draw_color(BG_COLOR);
 
     let mut text = Text::new(font, lines);
-    text.render_text(&texture_creator);
+    let mut number_w = 0;
 
     let mut cursor = Cursor::new(0, 0, &texture_creator);
     let mut event_pump = sdl_context.event_pump().unwrap();
@@ -232,18 +196,22 @@ fn main() {
 
                 Event::KeyDown { keycode: Some(Keycode::Left), .. } => {
                     cursor.left(&text.raw);
+                    text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Right), .. } => {
                     cursor.right(&text.raw);
+                    text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Up), .. } => {
                     cursor.up(&text.raw, &canvas);
+                    text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Down), .. } => {
                     cursor.down(&text.raw, &canvas);
+                    text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Return), .. } => {
@@ -258,16 +226,13 @@ fn main() {
                     cursor.x = 0;
                     cursor.wanted_x = 0;
                     cursor.y += 1;
-
-                    //text.render_text(&texture_creator);
+                    text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Backspace), .. } => {
                     if cursor.x > 0 {
                         cursor.left(&text.raw);
                         text.raw[cursor.get_absolute_y()].remove(cursor.x as usize);
-
-                        text.render_line(cursor.get_absolute_y(), &texture_creator);
                     }
                     else if cursor.x == 0 && cursor.get_absolute_y() > 0 {
                         let line = text.raw[cursor.get_absolute_y()].clone();
@@ -285,9 +250,8 @@ fn main() {
                         else {
                             cursor.y -= 1;
                         }
-
-                        //text.render_text(&texture_creator);
                     }
+                    text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::F5), .. } => {
@@ -297,80 +261,79 @@ fn main() {
                 Event::TextInput { text: input, .. } => {
                     text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, &input);
                     cursor.x += input.len() as u32;
-
-                    //text.render_line(cursor.get_absolute_y(), &texture_creator);
+                    text.needs_update = true;
                 },
 
                 Event::MouseWheel { y: dir, .. } => {
                     cursor.scroll_screen(&canvas, &text.raw, dir);
+                    text.needs_update = true;
                 },
 
                 _ => {}
             }
         }
 
-        canvas.clear();
+        if text.needs_update {
+            canvas.clear();
 
-        for i in (cursor.screen_y as usize)..text.raw.len() {
-            let line = text.raw[i].clone();
-            let mut iter = line.graphemes(true);
-            let mut x = 0;
-            let y = FONT_SIZE*((i-cursor.screen_y as usize) as u16);
-
-            let mut c = iter.next();
-            while c != None {
-                let texture = text.get_char(c.unwrap(), &texture_creator);
-                let texture_info = texture.query();
-
-                canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
-                x += texture_info.width;
-
-                c = iter.next()
+            let screen_limit = if text.raw.len() < (cursor.screen_y + canvas.window().size().1/FONT_SIZE as u32) as usize {
+                text.raw.len()
             }
+            else {
+                (cursor.screen_y + canvas.window().size().1/FONT_SIZE as u32) as usize
+            };
+
+            for i in (cursor.screen_y as usize)..screen_limit {
+                let mut x = 0;
+                let y = FONT_SIZE*((i-cursor.screen_y as usize) as u16);
+
+                let number = format!["{:1$} ", i+1, number_of_digits(text.raw.len())];
+                let mut n_iter = number.graphemes(true);
+                let mut n = n_iter.next();
+                while n != None {
+                    let texture = text.get_bold_char(n.unwrap(), &texture_creator);
+                    let texture_info = texture.query();
+
+                    canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
+                    x += texture_info.width;
+
+                    n = n_iter.next()
+                }
+
+                number_w = x;
+
+                let line = text.raw[i].clone();
+                let mut c_iter = line.graphemes(true);
+                let mut c = c_iter.next();
+                while c != None {
+                    let texture = text.get_normal_char(c.unwrap(), &texture_creator);
+                    let texture_info = texture.query();
+
+                    canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
+                    x += texture_info.width;
+
+                    c = c_iter.next()
+                }
+            }
+
+            text.font.set_style(sdl2::ttf::STYLE_NORMAL);
+            let (half, _) = text.raw[cursor.get_absolute_y()].split_at(cursor.x as usize);
+            let (x, _) = text.font.size_of(half).unwrap();
+            canvas.copy(&cursor.texture, None, Some(rect![x+number_w, cursor.y*(FONT_SIZE as u32), 4, FONT_SIZE])).unwrap();
+
+            canvas.set_draw_color(BAR_COLOR);
+            let (w_width, w_height) = canvas.window().size();
+            let _ = canvas.fill_rect(rect![0, w_height - FONT_SIZE as u32, w_width, FONT_SIZE]);
+            canvas.set_draw_color(BG_COLOR);
+
+            canvas.present();
+
+            text.needs_update = false;
         }
-
-        /*
-        match text.rendered {
-            Some(ref rendered) => {
-                match text.lines_rendered {
-                    Some(ref lines_rendered) => {
-                        for i in cursor.screen_y..(text.raw.len() as u32) {
-                            let texture = &rendered[i as usize];
-                            let line_texture = &lines_rendered[i as usize];
-
-                            let texture_info = texture.query();
-                            let line_texture_info = line_texture.query();
-
-                            let y = FONT_SIZE*((i-cursor.screen_y) as u16);
-                            canvas.copy(&line_texture, None, Some(rect![0, y, line_texture_info.width, line_texture_info.height])).unwrap();
-                            canvas.copy(&texture, None, Some(rect![line_texture_info.width, y, texture_info.width, texture_info.height])).unwrap();
-                            if y >= (canvas.window().size().1 as u16)-2*FONT_SIZE {
-                                break
-                            }
-                        }
-
-                        let line_number_info = &lines_rendered[cursor.get_absolute_y()].query();
-                        let (half, _) = text.raw[cursor.get_absolute_y()].split_at(cursor.x as usize);
-                        text.font.set_style(sdl2::ttf::STYLE_NORMAL);
-                        let (x, _) = text.font.size_of(half).unwrap();
-                        canvas.copy(&cursor.texture, None, Some(rect![x+line_number_info.width, cursor.y*(FONT_SIZE as u32), 4, FONT_SIZE])).unwrap();
-                    },
-                    _ => {},
-                };
-            },
-            _ => {},
-        };
-        */
-
-        canvas.set_draw_color(BAR_COLOR);
-        let (w_width, w_height) = canvas.window().size();
-        let _ = canvas.fill_rect(rect![0, w_height - FONT_SIZE as u32, w_width, FONT_SIZE]);
-        canvas.set_draw_color(BG_COLOR);
-
-        canvas.present();
+        std::thread::sleep(std::time::Duration::from_millis(5));
 
         let frame_time = std::time::Instant::now().duration_since(begin_loop_instant);
-        //println!["FPS: {}", 1_000_000_000/frame_time.subsec_nanos()];
+        println!["FPS: {}", 1_000_000_000/frame_time.subsec_nanos()];
     }
 }
 
