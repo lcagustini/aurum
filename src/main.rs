@@ -269,6 +269,13 @@ fn main() {
                     text.needs_update = true;
                 },
 
+                Event::Window { win_event: event, .. } => {
+                    match event {
+                        sdl2::event::WindowEvent::SizeChanged(_, _) => text.needs_update = true,
+                        _ => {},
+                    }
+                },
+
                 _ => {}
             }
         }
@@ -319,7 +326,7 @@ fn main() {
             text.font.set_style(sdl2::ttf::STYLE_NORMAL);
             let (half, _) = text.raw[cursor.get_absolute_y()].split_at(cursor.x as usize);
             let (x, _) = text.font.size_of(half).unwrap();
-            canvas.copy(&cursor.texture, None, Some(rect![x+number_w, cursor.y*(FONT_SIZE as u32), 4, FONT_SIZE])).unwrap();
+            canvas.copy(&cursor.texture, None, Some(rect![x+number_w-2, cursor.y*(FONT_SIZE as u32), 4, FONT_SIZE])).unwrap();
 
             canvas.set_draw_color(BAR_COLOR);
             let (w_width, w_height) = canvas.window().size();
@@ -330,7 +337,13 @@ fn main() {
 
             text.needs_update = false;
         }
-        std::thread::sleep(std::time::Duration::from_millis(5));
+        else {
+            let display_index = canvas.window().display_index().unwrap();
+            let display_mode = video_subsystem.current_display_mode(display_index).unwrap();
+            let frame_time = 1.0/display_mode.refresh_rate as f64;
+            let duration = std::time::Duration::new(frame_time as u64, ((frame_time - (frame_time as usize) as f64)*1_000_000_000.0) as u32);
+            std::thread::sleep(duration);
+        }
 
         let frame_time = std::time::Instant::now().duration_since(begin_loop_instant);
         println!["FPS: {}", 1_000_000_000/frame_time.subsec_nanos()];
