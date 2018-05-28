@@ -18,7 +18,7 @@ macro_rules! rect(($x:expr, $y:expr, $w:expr, $h:expr) => (sdl2::rect::Rect::new
 const WINDOW_WIDTH: u32 = 1200;
 const WINDOW_HEIGHT: u32 = 1000;
 const BG_COLOR: Color = Color{r: 25, g: 25, b: 25, a: 255};
-const BAR_COLOR: Color = Color{r: 255, g: 25, b: 25, a: 255};
+const BAR_COLOR: Color = Color{r: 15, g: 15, b: 15, a: 255};
 const FONT_SIZE: u16 = 20;
 
 struct Text<'ttf, 'a> {
@@ -41,7 +41,6 @@ impl<'ttf, 'a> Text<'ttf, 'a> {
             let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
 
             self.bold_character_cache.insert(character.to_owned(), texture);
-            println!["Cached bold {}", character];
         }
 
         self.bold_character_cache.get(character).unwrap()
@@ -55,7 +54,6 @@ impl<'ttf, 'a> Text<'ttf, 'a> {
             let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
 
             self.normal_character_cache.insert(character.to_owned(), texture);
-            println!["Cached normal {}", character];
         }
 
         self.normal_character_cache.get(character).unwrap()
@@ -181,13 +179,11 @@ fn main() {
     canvas.set_draw_color(BG_COLOR);
 
     let mut text = Text::new(font, lines);
-    let mut number_w = 0;
+    let mut number_w: u32 = 0;
 
     let mut cursor = Cursor::new(0, 0, &texture_creator);
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
-        let begin_loop_instant = std::time::Instant::now();
-
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit {..} | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
@@ -269,6 +265,36 @@ fn main() {
                     text.needs_update = true;
                 },
 
+                Event::MouseButtonDown { mouse_btn: button, x, y, .. } | Event::MouseButtonUp { mouse_btn: button, x, y, .. } => {
+                    match button {
+                        sdl2::mouse::MouseButton::Left => {
+                            cursor.y = (y/FONT_SIZE as i32) as u32;
+
+                            let mut width = 0;
+                            let mut len = 0;
+                            let line = text.raw[cursor.get_absolute_y()].clone();
+                            let mut c_iter = line.graphemes(true);
+                            let mut c = c_iter.next();
+                            while c != None {
+                                let cur = c.unwrap();
+                                let texture = text.get_normal_char(&cur, &texture_creator);
+                                let texture_info = texture.query();
+
+                                width += texture_info.width;
+                                len += cur.len() as u32;
+                                if ((x-number_w as i32)-width as i32).abs() < FONT_SIZE as i32/2 {
+                                    break;
+                                }
+
+                                c = c_iter.next();
+                            }
+                            cursor.x = len;
+                            text.needs_update = true;
+                        },
+                        _ => {},
+                    }
+                },
+
                 Event::Window { win_event: event, .. } => {
                     match event {
                         sdl2::event::WindowEvent::SizeChanged(_, _) => text.needs_update = true,
@@ -323,15 +349,32 @@ fn main() {
                 }
             }
 
-            text.font.set_style(sdl2::ttf::STYLE_NORMAL);
-            let (half, _) = text.raw[cursor.get_absolute_y()].split_at(cursor.x as usize);
-            let (x, _) = text.font.size_of(half).unwrap();
-            canvas.copy(&cursor.texture, None, Some(rect![x+number_w-2, cursor.y*(FONT_SIZE as u32), 4, FONT_SIZE])).unwrap();
-
-            canvas.set_draw_color(BAR_COLOR);
             let (w_width, w_height) = canvas.window().size();
-            let _ = canvas.fill_rect(rect![0, w_height - FONT_SIZE as u32, w_width, FONT_SIZE]);
-            canvas.set_draw_color(BG_COLOR);
+            {
+                text.font.set_style(sdl2::ttf::STYLE_NORMAL);
+                let (half, _) = text.raw[cursor.get_absolute_y()].split_at(cursor.x as usize);
+                let (x, _) = text.font.size_of(half).unwrap();
+                canvas.copy(&cursor.texture, None, Some(rect![x+number_w-2, cursor.y*(FONT_SIZE as u32), 4, FONT_SIZE])).unwrap();
+            }{
+                canvas.set_draw_color(BAR_COLOR);
+                let _ = canvas.fill_rect(rect![0, w_height - FONT_SIZE as u32, w_width, FONT_SIZE]);
+                canvas.set_draw_color(BG_COLOR);
+            }{
+                let lines_ui = format!["{}/{}", cursor.get_absolute_y()+1, text.raw.len()];
+                let mut n_iter = lines_ui.graphemes(true);
+                let mut n = n_iter.next();
+                let mut x = w_width-text.font.size_of(&lines_ui).unwrap().0-10;
+                while n != None {
+                    let texture = text.get_normal_char(n.unwrap(), &texture_creator);
+                    let texture_info = texture.query();
+
+                    canvas.copy(texture, None, Some(rect![x, w_height-2-FONT_SIZE as u32, texture_info.width, texture_info.height])).unwrap();
+
+                    n = n_iter.next();
+
+                    x += texture_info.width;
+                }
+            }
 
             canvas.present();
 
@@ -344,9 +387,6 @@ fn main() {
             let duration = std::time::Duration::new(frame_time as u64, ((frame_time - (frame_time as usize) as f64)*1_000_000_000.0) as u32);
             std::thread::sleep(duration);
         }
-
-        let frame_time = std::time::Instant::now().duration_since(begin_loop_instant);
-        println!["FPS: {}", 1_000_000_000/frame_time.subsec_nanos()];
     }
 }
 
