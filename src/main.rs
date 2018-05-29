@@ -152,6 +152,31 @@ impl<'r> Cursor<'r> {
             }
         }
     }
+
+    fn move_to(&mut self, x: i32, y: i32, number_w: u32, texture_creator: &'r TextureCreator<WindowContext>, text: &mut Text<'_, 'r>) {
+        self.y = (y/FONT_SIZE as i32) as u32;
+
+        let mut width = 0;
+        let mut len = 0;
+        let line = text.raw[self.get_absolute_y()].clone();
+        let mut c_iter = line.graphemes(true);
+        let mut c = c_iter.next();
+        while c != None {
+            let cur = c.unwrap();
+            let texture = text.get_normal_char(&cur, &texture_creator);
+            let texture_info = texture.query();
+
+            width += texture_info.width;
+            len += cur.len() as u32;
+            if ((x-number_w as i32)-width as i32).abs() < FONT_SIZE as i32/2 {
+                break;
+            }
+
+            c = c_iter.next();
+        }
+        self.x = len;
+        text.needs_update = true;
+    }
 }
 
 fn main() {
@@ -265,31 +290,28 @@ fn main() {
                     text.needs_update = true;
                 },
 
-                Event::MouseButtonDown { mouse_btn: button, x, y, .. } | Event::MouseButtonUp { mouse_btn: button, x, y, .. } => {
+                Event::MouseButtonDown { mouse_btn: button, x, y, .. } => {
                     match button {
                         sdl2::mouse::MouseButton::Left => {
-                            cursor.y = (y/FONT_SIZE as i32) as u32;
+                            cursor.move_to(x, y, number_w, &texture_creator, &mut text);
+                        },
+                        _ => {},
+                    }
+                },
 
-                            let mut width = 0;
-                            let mut len = 0;
-                            let line = text.raw[cursor.get_absolute_y()].clone();
-                            let mut c_iter = line.graphemes(true);
-                            let mut c = c_iter.next();
-                            while c != None {
-                                let cur = c.unwrap();
-                                let texture = text.get_normal_char(&cur, &texture_creator);
-                                let texture_info = texture.query();
+                Event::MouseButtonUp { mouse_btn: button, x, y, .. } => {
+                    match button {
+                        sdl2::mouse::MouseButton::Left => {
+                            let (old_x, old_y) = (cursor.x, cursor.y);
+                            cursor.move_to(x, y, number_w, &texture_creator, &mut text);
 
-                                width += texture_info.width;
-                                len += cur.len() as u32;
-                                if ((x-number_w as i32)-width as i32).abs() < FONT_SIZE as i32/2 {
-                                    break;
-                                }
-
-                                c = c_iter.next();
+                            println!["old ({},{}) new ({},{})", old_x, old_y, cursor.x, cursor.y];
+                            if old_x < cursor.x {
+                                println!["{}", &text.raw[cursor.get_absolute_y()][old_x as usize..cursor.x as usize]];
                             }
-                            cursor.x = len;
-                            text.needs_update = true;
+                            else {
+                                println!["{}", &text.raw[cursor.get_absolute_y()][cursor.x as usize..old_x as usize]];
+                            }
                         },
                         _ => {},
                     }
@@ -306,87 +328,87 @@ fn main() {
             }
         }
 
-        if text.needs_update {
-            canvas.clear();
-
-            let screen_limit = if text.raw.len() < (cursor.screen_y + canvas.window().size().1/FONT_SIZE as u32) as usize {
-                text.raw.len()
-            }
-            else {
-                (cursor.screen_y + canvas.window().size().1/FONT_SIZE as u32) as usize
-            };
-
-            for i in (cursor.screen_y as usize)..screen_limit {
-                let mut x = 0;
-                let y = FONT_SIZE*((i-cursor.screen_y as usize) as u16);
-
-                let number = format!["{:1$} ", i+1, number_of_digits(text.raw.len())];
-                let mut n_iter = number.graphemes(true);
-                let mut n = n_iter.next();
-                while n != None {
-                    let texture = text.get_bold_char(n.unwrap(), &texture_creator);
-                    let texture_info = texture.query();
-
-                    canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
-                    x += texture_info.width;
-
-                    n = n_iter.next()
-                }
-
-                number_w = x;
-
-                let line = text.raw[i].clone();
-                let mut c_iter = line.graphemes(true);
-                let mut c = c_iter.next();
-                while c != None {
-                    let texture = text.get_normal_char(c.unwrap(), &texture_creator);
-                    let texture_info = texture.query();
-
-                    canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
-                    x += texture_info.width;
-
-                    c = c_iter.next()
-                }
-            }
-
-            let (w_width, w_height) = canvas.window().size();
-            {
-                text.font.set_style(sdl2::ttf::STYLE_NORMAL);
-                let (half, _) = text.raw[cursor.get_absolute_y()].split_at(cursor.x as usize);
-                let (x, _) = text.font.size_of(half).unwrap();
-                canvas.copy(&cursor.texture, None, Some(rect![x+number_w-2, cursor.y*(FONT_SIZE as u32), 4, FONT_SIZE])).unwrap();
-            }{
-                canvas.set_draw_color(BAR_COLOR);
-                let _ = canvas.fill_rect(rect![0, w_height - FONT_SIZE as u32, w_width, FONT_SIZE]);
-                canvas.set_draw_color(BG_COLOR);
-            }{
-                let lines_ui = format!["{}/{}", cursor.get_absolute_y()+1, text.raw.len()];
-                let mut n_iter = lines_ui.graphemes(true);
-                let mut n = n_iter.next();
-                let mut x = w_width-text.font.size_of(&lines_ui).unwrap().0-10;
-                while n != None {
-                    let texture = text.get_normal_char(n.unwrap(), &texture_creator);
-                    let texture_info = texture.query();
-
-                    canvas.copy(texture, None, Some(rect![x, w_height-2-FONT_SIZE as u32, texture_info.width, texture_info.height])).unwrap();
-
-                    n = n_iter.next();
-
-                    x += texture_info.width;
-                }
-            }
-
-            canvas.present();
-
-            text.needs_update = false;
-        }
-        else {
+        if !text.needs_update {
             let display_index = canvas.window().display_index().unwrap();
             let display_mode = video_subsystem.current_display_mode(display_index).unwrap();
             let frame_time = 1.0/display_mode.refresh_rate as f64;
             let duration = std::time::Duration::new(frame_time as u64, ((frame_time - (frame_time as usize) as f64)*1_000_000_000.0) as u32);
             std::thread::sleep(duration);
+
+            continue;
         }
+        canvas.clear();
+
+        let screen_limit = if text.raw.len() < (cursor.screen_y + canvas.window().size().1/FONT_SIZE as u32) as usize {
+            text.raw.len()
+        }
+        else {
+            (cursor.screen_y + canvas.window().size().1/FONT_SIZE as u32) as usize
+        };
+
+        for i in (cursor.screen_y as usize)..screen_limit {
+            let mut x = 0;
+            let y = FONT_SIZE*((i-cursor.screen_y as usize) as u16);
+
+            let number = format!["{:1$} ", i+1, number_of_digits(text.raw.len())];
+            let mut n_iter = number.graphemes(true);
+            let mut n = n_iter.next();
+            while n != None {
+                let texture = text.get_bold_char(n.unwrap(), &texture_creator);
+                let texture_info = texture.query();
+
+                canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
+                x += texture_info.width;
+
+                n = n_iter.next()
+            }
+
+            number_w = x;
+
+            let line = text.raw[i].clone();
+            let mut c_iter = line.graphemes(true);
+            let mut c = c_iter.next();
+            while c != None {
+                let texture = text.get_normal_char(c.unwrap(), &texture_creator);
+                let texture_info = texture.query();
+
+                canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
+                x += texture_info.width;
+
+                c = c_iter.next()
+            }
+        }
+
+        let (w_width, w_height) = canvas.window().size();
+        {
+            text.font.set_style(sdl2::ttf::STYLE_NORMAL);
+            let (half, _) = text.raw[cursor.get_absolute_y()].split_at(cursor.x as usize);
+            let (x, _) = text.font.size_of(half).unwrap();
+            canvas.copy(&cursor.texture, None, Some(rect![x+number_w-2, cursor.y*(FONT_SIZE as u32), 4, FONT_SIZE])).unwrap();
+        }{
+            canvas.set_draw_color(BAR_COLOR);
+            let _ = canvas.fill_rect(rect![0, w_height - FONT_SIZE as u32, w_width, FONT_SIZE]);
+            canvas.set_draw_color(BG_COLOR);
+        }{
+            let lines_ui = format!["{}/{}", cursor.get_absolute_y()+1, text.raw.len()];
+            let mut n_iter = lines_ui.graphemes(true);
+            let mut n = n_iter.next();
+            let mut x = w_width-text.font.size_of(&lines_ui).unwrap().0-10;
+            while n != None {
+                let texture = text.get_normal_char(n.unwrap(), &texture_creator);
+                let texture_info = texture.query();
+
+                canvas.copy(texture, None, Some(rect![x, w_height-2-FONT_SIZE as u32, texture_info.width, texture_info.height])).unwrap();
+
+                n = n_iter.next();
+
+                x += texture_info.width;
+            }
+        }
+
+        canvas.present();
+
+        text.needs_update = false;
     }
 }
 
