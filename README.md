@@ -1,1 +1,6 @@
-# aurum
+# Aurum
+
+Requires SDL2
+```
+cargo run
+```
