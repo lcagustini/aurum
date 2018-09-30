@@ -16,7 +16,7 @@ const WINDOW_HEIGHT: u32 = 1000;
 
 const BG_COLOR: Color = Color{r: 25, g: 25, b: 25, a: 255};
 const BAR_COLOR: Color = Color{r: 15, g: 15, b: 15, a: 255};
-const SELECT_COLOR: Color = Color{r: 180, g: 180, b: 180, a: 100};
+const SELECT_COLOR: Color = Color{r: 255, g: 255, b: 255, a: 100};
 
 const FONT_SIZE: u16 = 20;
 
@@ -56,7 +56,6 @@ fn main() {
     canvas.set_draw_color(BG_COLOR);
 
     let mut text = text::Text::new(font, lines);
-    let mut number_w: u32 = 0;
 
     let mut cursor = cursor::Cursor::new(0, 0, &texture_creator);
     let mut selected = Select{x1: 0, y1: 0, x2: 0, y2: 0};
@@ -87,6 +86,23 @@ fn main() {
                 Event::KeyDown { keycode: Some(Keycode::Down), .. } => {
                     cursor.down(&text.raw, &canvas);
                     text.needs_update = true;
+                },
+
+                Event::KeyDown { keycode: Some(Keycode::C), keymod, .. } => {
+                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                        let text = &text.raw[selected.y1][selected.x1..selected.x2];
+                        video_subsystem.clipboard().set_clipboard_text(text).unwrap();
+                    }
+                },
+
+                Event::KeyDown { keycode: Some(Keycode::V), keymod, .. } => {
+                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                        let input = video_subsystem.clipboard().clipboard_text().unwrap();
+
+                        text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, &input);
+                        cursor.x += input.len() as u32;
+                        text.needs_update = true;
+                    }
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Return), .. } => {
@@ -147,7 +163,8 @@ fn main() {
                 Event::MouseButtonDown { mouse_btn: button, x, y, .. } => {
                     match button {
                         sdl2::mouse::MouseButton::Left => {
-                            cursor.move_to(x, y, number_w, &texture_creator, &mut text);
+                            let n_w = cursor.number_w;
+                            cursor.move_to(x, y, n_w, &texture_creator, &mut text);
                         },
                         _ => {},
                     }
@@ -158,23 +175,27 @@ fn main() {
                         sdl2::mouse::MouseButton::Left => {
                             let (old_x, old_y) = (cursor.x, cursor.get_absolute_y());
 
-                            cursor.move_to(x, y, number_w, &texture_creator, &mut text);
+                            {
+                                let n_w = cursor.number_w;
+                                cursor.move_to(x, y, n_w, &texture_creator, &mut text);
+                            }
 
                             if old_x < cursor.x {
                                 selected.x1 = old_x as usize;
-                                selected.y1 = old_y as usize;
-
                                 selected.x2 = cursor.x as usize;
-                                selected.y2 = cursor.get_absolute_y() as usize;
-                                println!["{}", &text.raw[cursor.get_absolute_y()][old_x as usize..cursor.x as usize]];
                             }
                             else {
                                 selected.x2 = old_x as usize;
-                                selected.y2 = old_y as usize;
-
                                 selected.x1 = cursor.x as usize;
+                            }
+
+                            if old_y < cursor.get_absolute_y() {
+                                selected.y1 = old_y as usize;
+                                selected.y2 = cursor.get_absolute_y() as usize;
+                            }
+                            else {
                                 selected.y1 = cursor.get_absolute_y() as usize;
-                                println!["{}", &text.raw[cursor.get_absolute_y()][cursor.x as usize..old_x as usize]];
+                                selected.y2 = old_y as usize;
                             }
 
                             text.needs_update = true;
@@ -205,61 +226,81 @@ fn main() {
         }
         canvas.clear();
 
-        let screen_limit = if text.raw.len() < (cursor.screen_y + canvas.window().size().1/FONT_SIZE as u32) as usize {
-            text.raw.len()
-        }
-        else {
-            (cursor.screen_y + canvas.window().size().1/FONT_SIZE as u32) as usize
-        };
-
-        for i in (cursor.screen_y as usize)..screen_limit {
-            let mut x = 0;
-            let y = FONT_SIZE*((i-cursor.screen_y as usize) as u16);
-
-            let number = format!["{:1$} ", i+1, utils::number_of_digits(text.raw.len())];
-            let mut n_iter = number.graphemes(true);
-            let mut n = n_iter.next();
-            while n != None {
-                let texture = text.get_bold_char(n.unwrap(), &texture_creator);
-                let texture_info = texture.query();
-
-                canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
-                x += texture_info.width;
-
-                n = n_iter.next()
-            }
-
-            number_w = x;
-
-            let line = text.raw[i].clone();
-            let mut c_iter = line.graphemes(true);
-            let mut c = c_iter.next();
-            while c != None {
-                let texture = text.get_normal_char(c.unwrap(), &texture_creator);
-                let texture_info = texture.query();
-
-                canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
-                x += texture_info.width;
-
-                c = c_iter.next()
-            }
-        }
-
         let (w_width, w_height) = canvas.window().size();
+
+        //Draw Lines
+        {
+            let screen_limit = if text.raw.len() < (cursor.screen_y + canvas.window().size().1/FONT_SIZE as u32) as usize {
+                text.raw.len()
+            }
+            else {
+                (cursor.screen_y + canvas.window().size().1/FONT_SIZE as u32) as usize
+            };
+            for i in (cursor.screen_y as usize)..screen_limit {
+                let mut x = 0;
+                let y = FONT_SIZE*((i-cursor.screen_y as usize) as u16);
+
+                let number = format!["{:1$} ", i+1, utils::number_of_digits(text.raw.len())];
+                let mut n_iter = number.graphemes(true);
+                let mut n = n_iter.next();
+                while n != None {
+                    let texture = text.get_bold_char(n.unwrap(), &texture_creator);
+                    let texture_info = texture.query();
+
+                    canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
+                    x += texture_info.width;
+
+                    n = n_iter.next()
+                }
+
+                cursor.number_w = x;
+
+                let line = text.raw[i].clone();
+                let mut c_iter = line.graphemes(true);
+                let mut c = c_iter.next();
+                while c != None {
+                    let texture = text.get_normal_char(c.unwrap(), &texture_creator);
+                    let texture_info = texture.query();
+
+                    canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
+                    x += texture_info.width;
+
+                    c = c_iter.next()
+                }
+            }
+        }
+
+        //Draw text selection
+        {
+            let (half, _) = text.raw[selected.y1].split_at(selected.x1);
+            let (x1, _) = text.font.size_of(half).unwrap();
+
+            let (half, _) = text.raw[selected.y2].split_at(selected.x2);
+            let (x2, _) = text.font.size_of(half).unwrap();
+
+            if x2-x1 > 0 {
+                let mut surface = sdl2::surface::Surface::new(x2-x1, ((selected.y2-selected.y1+1)*FONT_SIZE as usize) as u32, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
+                surface.fill_rect(None, SELECT_COLOR).unwrap();
+                let texture = texture_creator.create_texture_from_surface(surface).unwrap();
+
+                canvas.copy(&texture, None, Some(rect![x1+cursor.number_w, selected.y1*FONT_SIZE as usize, x2-x1, (selected.y2-selected.y1+1)*FONT_SIZE as usize])).unwrap();
+            }
+        }
+
+        //Draw cursor
         {
             text.font.set_style(sdl2::ttf::STYLE_NORMAL);
             let (half, _) = text.raw[cursor.get_absolute_y()].split_at(cursor.x as usize);
             let (x, _) = text.font.size_of(half).unwrap();
-            canvas.copy(&cursor.texture, None, Some(rect![x+number_w-2, cursor.y*(FONT_SIZE as u32), 4, FONT_SIZE])).unwrap();
+            canvas.copy(&cursor.texture, None, Some(rect![x+cursor.number_w, cursor.y*(FONT_SIZE as u32), 4, FONT_SIZE])).unwrap();
         }
 
+        //Draw statusbar
         {
             canvas.set_draw_color(BAR_COLOR);
-            let _ = canvas.fill_rect(rect![0, w_height - FONT_SIZE as u32, w_width, FONT_SIZE]);
+            canvas.fill_rect(rect![0, w_height - FONT_SIZE as u32, w_width, FONT_SIZE]).unwrap();
             canvas.set_draw_color(BG_COLOR);
-        }
 
-        {
             let lines_ui = format!["{}/{}", cursor.get_absolute_y()+1, text.raw.len()];
             let mut n_iter = lines_ui.graphemes(true);
             let mut n = n_iter.next();
@@ -268,24 +309,12 @@ fn main() {
                 let texture = text.get_normal_char(n.unwrap(), &texture_creator);
                 let texture_info = texture.query();
 
-                canvas.copy(texture, None, Some(rect![x, w_height-2-FONT_SIZE as u32, texture_info.width, texture_info.height])).unwrap();
+                canvas.copy(texture, None, Some(rect![x, w_height-FONT_SIZE as u32, texture_info.width, texture_info.height])).unwrap();
 
                 n = n_iter.next();
 
                 x += texture_info.width;
             }
-        }
-
-        {
-            canvas.set_draw_color(SELECT_COLOR);
-            let (half, _) = text.raw[selected.y1].split_at(selected.x1);
-            let (x1, _) = text.font.size_of(half).unwrap();
-
-            let (half, _) = text.raw[selected.y2].split_at(selected.x2);
-            let (x2, _) = text.font.size_of(half).unwrap();
-
-            let _ = canvas.fill_rect(rect![x1+number_w-2, selected.y1*FONT_SIZE as usize, x2-x1, (selected.y2-selected.y1+1)*FONT_SIZE as usize]);
-            canvas.set_draw_color(BG_COLOR);
         }
 
         canvas.present();

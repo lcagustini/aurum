@@ -12,8 +12,11 @@ use ::text;
 pub struct Cursor<'r> {
     pub x: u32,
     pub y: u32,
+
     pub wanted_x: u32,
     pub screen_y: u32,
+    pub number_w: u32,
+
     pub texture: Texture<'r>,
 }
 impl<'r> Cursor<'r> {
@@ -21,7 +24,7 @@ impl<'r> Cursor<'r> {
         let mut cursor_surface = sdl2::surface::Surface::new((6*FONT_SIZE/10) as u32, FONT_SIZE as u32, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
         cursor_surface.fill_rect(rect![0, 0, 4, FONT_SIZE], sdl2::pixels::Color::RGBA(255, 255, 255, 128)).unwrap();
 
-        Cursor{ x: x, y: y, wanted_x: x, screen_y: 0, texture: texture_creator.create_texture_from_surface(cursor_surface).unwrap() }
+        Cursor{ x: x, y: y, wanted_x: x, screen_y: 0, number_w: 0, texture: texture_creator.create_texture_from_surface(cursor_surface).unwrap() }
     }
 
     pub fn up(&mut self, text: &Vec<String>, canvas: &Canvas<Window>) {
