@@ -11,9 +11,6 @@ use std::env;
 
 macro_rules! rect(($x:expr, $y:expr, $w:expr, $h:expr) => (sdl2::rect::Rect::new($x as i32, $y as i32, $w as u32, $h as u32)));
 
-const WINDOW_WIDTH: u32 = 1200;
-const WINDOW_HEIGHT: u32 = 1000;
-
 const BG_COLOR: Color = Color{r: 25, g: 25, b: 25, a: 255};
 const BAR_COLOR: Color = Color{r: 15, g: 15, b: 15, a: 255};
 const SELECT_COLOR: Color = Color{r: 255, g: 255, b: 255, a: 100};
@@ -38,7 +35,7 @@ fn main() {
 
     let args: Vec<String> = env::args().collect();
 
-    let window = video_subsystem.window("Aurum", WINDOW_WIDTH, WINDOW_HEIGHT)
+    let window = video_subsystem.window("Aurum", 1200, 1000)
         .position_centered()
         .allow_highdpi()
         .resizable()
@@ -232,15 +229,15 @@ fn main() {
 
         //Draw Lines
         {
-            let screen_limit = if text.raw.len() < (cursor.screen_y + canvas.window().size().1/FONT_SIZE as u32) as usize {
+            let screen_limit = if text.raw.len() < (cursor.screen_y + canvas.window().size().1/text.font_size as u32) as usize {
                 text.raw.len()
             }
             else {
-                (cursor.screen_y + canvas.window().size().1/FONT_SIZE as u32) as usize
+                (cursor.screen_y + canvas.window().size().1/text.font_size as u32) as usize
             };
             for i in (cursor.screen_y as usize)..screen_limit {
                 let mut x = 0;
-                let y = FONT_SIZE*((i-cursor.screen_y as usize) as u16);
+                let y = text.font_size*((i-cursor.screen_y as usize) as u16);
 
                 let number = format!["{:1$} ", i+1, utils::number_of_digits(text.raw.len())];
                 let mut n_iter = number.graphemes(true);
@@ -282,11 +279,11 @@ fn main() {
                 let (x2, _) = text.font.size_of(half).unwrap();
 
                 if x2-x1 > 0 {
-                    let mut surface = sdl2::surface::Surface::new(x2-x1, ((selected.y2-selected.y1+1)*FONT_SIZE as usize) as u32, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
+                    let mut surface = sdl2::surface::Surface::new(x2-x1, ((selected.y2-selected.y1+1)*text.font_size as usize) as u32, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
                     surface.fill_rect(None, SELECT_COLOR).unwrap();
                     let texture = texture_creator.create_texture_from_surface(surface).unwrap();
 
-                    canvas.copy(&texture, None, Some(rect![x1+cursor.number_w, selected.y1*FONT_SIZE as usize, x2-x1, (selected.y2-selected.y1+1)*FONT_SIZE as usize])).unwrap();
+                    canvas.copy(&texture, None, Some(rect![x1+cursor.number_w, selected.y1*text.font_size as usize, x2-x1, (selected.y2-selected.y1+1)*text.font_size as usize])).unwrap();
                 }
             }
         }
@@ -296,13 +293,13 @@ fn main() {
             text.font.set_style(sdl2::ttf::STYLE_NORMAL);
             let (half, _) = text.raw[cursor.get_absolute_y()].split_at(cursor.x as usize);
             let (x, _) = text.font.size_of(half).unwrap();
-            canvas.copy(&cursor.texture, None, Some(rect![x+cursor.number_w, cursor.y*(FONT_SIZE as u32), 4, FONT_SIZE])).unwrap();
+            canvas.copy(&cursor.texture, None, Some(rect![x+cursor.number_w, cursor.y*(text.font_size as u32), 4, text.font_size])).unwrap();
         }
 
         //Draw statusbar
         {
             canvas.set_draw_color(BAR_COLOR);
-            canvas.fill_rect(rect![0, w_height - FONT_SIZE as u32, w_width, FONT_SIZE]).unwrap();
+            canvas.fill_rect(rect![0, w_height - text.font_size as u32, w_width, text.font_size]).unwrap();
             canvas.set_draw_color(BG_COLOR);
 
             let lines_ui = format!["{}/{}", cursor.get_absolute_y()+1, text.raw.len()];
@@ -310,10 +307,12 @@ fn main() {
             let mut n = n_iter.next();
             let mut x = w_width-text.font.size_of(&lines_ui).unwrap().0-10;
             while n != None {
+                let f_s = text.font_size;
+
                 let texture = text.get_normal_char(n.unwrap(), &texture_creator);
                 let texture_info = texture.query();
 
-                canvas.copy(texture, None, Some(rect![x, w_height-FONT_SIZE as u32, texture_info.width, texture_info.height])).unwrap();
+                canvas.copy(texture, None, Some(rect![x, w_height-f_s as u32, texture_info.width, texture_info.height])).unwrap();
 
                 n = n_iter.next();
 
