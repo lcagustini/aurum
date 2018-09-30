@@ -4,179 +4,31 @@ extern crate unicode_segmentation;
 use sdl2::pixels::Color;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use sdl2::render::{Texture, TextureCreator, Canvas};
-use sdl2::video::{Window, WindowContext};
 
 use unicode_segmentation::UnicodeSegmentation;
 
-use std::collections::HashMap;
-use std::io::prelude::*;
 use std::env;
 
 macro_rules! rect(($x:expr, $y:expr, $w:expr, $h:expr) => (sdl2::rect::Rect::new($x as i32, $y as i32, $w as u32, $h as u32)));
 
 const WINDOW_WIDTH: u32 = 1200;
 const WINDOW_HEIGHT: u32 = 1000;
+
 const BG_COLOR: Color = Color{r: 25, g: 25, b: 25, a: 255};
 const BAR_COLOR: Color = Color{r: 15, g: 15, b: 15, a: 255};
+const SELECT_COLOR: Color = Color{r: 180, g: 180, b: 180, a: 100};
+
 const FONT_SIZE: u16 = 20;
 
-struct Text<'ttf, 'a> {
-    font: sdl2::ttf::Font<'ttf, 'a>,
-    raw: Vec<String>,
-    normal_character_cache: HashMap<String, Texture<'a>>,
-    bold_character_cache: HashMap<String, Texture<'a>>,
-    needs_update: bool,
-}
-impl<'ttf, 'a> Text<'ttf, 'a> {
-    fn new(font: sdl2::ttf::Font<'ttf, 'a>, raw: Vec<String>) -> Text<'ttf, 'a> {
-        Text { font: font, raw: raw, normal_character_cache: HashMap::new(), bold_character_cache: HashMap::new(), needs_update: true }
-    }
+mod utils;
+mod text;
+mod cursor;
 
-    fn get_bold_char(&mut self, character: &str, texture_creator: &'a TextureCreator<WindowContext>) -> &Texture {
-        if !self.bold_character_cache.contains_key(character) {
-            self.font.set_style(sdl2::ttf::STYLE_BOLD);
-
-            let surface = self.font.render(character).blended(Color::RGBA(255, 255, 255, 255)).unwrap();
-            let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
-
-            self.bold_character_cache.insert(character.to_owned(), texture);
-        }
-
-        self.bold_character_cache.get(character).unwrap()
-    }
-
-    fn get_normal_char(&mut self, character: &str, texture_creator: &'a TextureCreator<WindowContext>) -> &Texture {
-        if !self.normal_character_cache.contains_key(character) {
-            self.font.set_style(sdl2::ttf::STYLE_NORMAL);
-
-            let surface = self.font.render(character).blended(Color::RGBA(255, 255, 255, 255)).unwrap();
-            let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
-
-            self.normal_character_cache.insert(character.to_owned(), texture);
-        }
-
-        self.normal_character_cache.get(character).unwrap()
-    }
-}
-
-struct Cursor<'r> {
-    x: u32,
-    y: u32,
-    wanted_x: u32,
-    screen_y: u32,
-    texture: Texture<'r>,
-}
-impl<'r> Cursor<'r> {
-    fn new(x: u32, y: u32, texture_creator: &'r TextureCreator<WindowContext>) -> Cursor<'r> {
-        let mut cursor_surface = sdl2::surface::Surface::new((6*FONT_SIZE/10) as u32, FONT_SIZE as u32, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
-        cursor_surface.fill_rect(rect![0, 0, 4, FONT_SIZE], sdl2::pixels::Color::RGBA(255, 255, 255, 128)).unwrap();
-
-        Cursor{ x: x, y: y, wanted_x: x, screen_y: 0, texture: texture_creator.create_texture_from_surface(cursor_surface).unwrap() }
-    }
-
-    fn up(&mut self, text: &Vec<String>, canvas: &Canvas<Window>) {
-        if self.y > 0 {
-            self.y -= 1;
-            self.x = if self.wanted_x > text[self.get_absolute_y()].len() as u32 {
-                text[self.get_absolute_y()].len() as u32
-            }
-            else {
-                self.wanted_x
-            };
-        }
-        else if self.get_absolute_y() > 0 {
-            self.scroll_screen(canvas, text, 1);
-            self.up(text, canvas);
-        }
-    }
-
-    fn down(&mut self, text: &Vec<String>, canvas: &Canvas<Window>) {
-        if self.get_absolute_y() < text.len()-1 && self.y < (canvas.window().size().1/FONT_SIZE as u32)-2 {
-            self.y += 1;
-            self.x = if self.wanted_x > text[self.get_absolute_y()].len() as u32 {
-                text[self.get_absolute_y()].len() as u32
-            }
-            else {
-                self.wanted_x
-            };
-        }
-        else if self.get_absolute_y() < text.len()-1 {
-            self.scroll_screen(canvas, text, -1);
-            self.down(text, canvas);
-        }
-    }
-
-    fn left(&mut self, text: &Vec<String>) {
-        if self.x > 0 {
-            self.x -= 1;
-            while !text[self.get_absolute_y()].is_char_boundary(self.x as usize) {
-                self.x -= 1;
-            }
-            self.wanted_x = self.x;
-        }
-    }
-
-    fn right(&mut self, text: &Vec<String>) {
-        if self.x < text[self.get_absolute_y()].len() as u32 {
-            self.x += 1;
-            while !text[self.get_absolute_y()].is_char_boundary(self.x as usize) {
-                self.x += 1;
-            }
-            self.wanted_x = self.x;
-        }
-    }
-
-    fn get_absolute_y(&self) -> usize {
-        (self.y + self.screen_y) as usize
-    }
-
-    fn scroll_screen(&mut self, canvas: &Canvas<Window>, text: &Vec<String>, dir: i32) {
-        if (self.screen_y > 0 && dir > 0) || (self.screen_y < (text.len()-1) as u32 && dir < 0) {
-            self.screen_y = if dir > 0 { self.screen_y - 1 } else { self.screen_y + 1 };
-            if (self.y > 0 && dir < 0) || (self.y < (canvas.window().size().1/FONT_SIZE as u32)-2 && dir > 0) {
-                if dir > 0 {
-                    self.down(text, canvas);
-                }
-                else {
-                    self.up(text, canvas);
-                };
-            }
-            else {
-                self.x = if self.wanted_x > text[self.get_absolute_y()].len() as u32 {
-                    text[self.get_absolute_y()].len() as u32
-                }
-                else {
-                    self.wanted_x
-                };
-            }
-        }
-    }
-
-    fn move_to(&mut self, x: i32, y: i32, number_w: u32, texture_creator: &'r TextureCreator<WindowContext>, text: &mut Text<'_, 'r>) {
-        self.y = (y/FONT_SIZE as i32) as u32;
-
-        let mut width = 0;
-        let mut len = 0;
-        let line = text.raw[self.get_absolute_y()].clone();
-        let mut c_iter = line.graphemes(true);
-        let mut c = c_iter.next();
-        while c != None {
-            let cur = c.unwrap();
-            let texture = text.get_normal_char(&cur, &texture_creator);
-            let texture_info = texture.query();
-
-            width += texture_info.width;
-            len += cur.len() as u32;
-            if ((x-number_w as i32)-width as i32).abs() < FONT_SIZE as i32/2 {
-                break;
-            }
-
-            c = c_iter.next();
-        }
-        self.x = len;
-        text.needs_update = true;
-    }
+struct Select {
+    x1: usize,
+    y1: usize,
+    x2: usize,
+    y2: usize,
 }
 
 fn main() {
@@ -199,14 +51,16 @@ fn main() {
     let mut canvas = window.into_canvas().build().unwrap();
     let texture_creator = canvas.texture_creator();
 
-    let lines: Vec<String> = read_file(&args[1]).split("\n").map(|x| x.to_owned()).collect();
+    let lines: Vec<String> = utils::read_file(&args[1]).split("\n").map(|x| x.to_owned()).collect();
 
     canvas.set_draw_color(BG_COLOR);
 
-    let mut text = Text::new(font, lines);
+    let mut text = text::Text::new(font, lines);
     let mut number_w: u32 = 0;
 
-    let mut cursor = Cursor::new(0, 0, &texture_creator);
+    let mut cursor = cursor::Cursor::new(0, 0, &texture_creator);
+    let mut selected = Select{x1: 0, y1: 0, x2: 0, y2: 0};
+
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -276,7 +130,7 @@ fn main() {
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::F5), .. } => {
-                    save_file(&args[1], &text.raw);
+                    utils::save_file(&args[1], &text.raw);
                 },
 
                 Event::TextInput { text: input, .. } => {
@@ -302,16 +156,28 @@ fn main() {
                 Event::MouseButtonUp { mouse_btn: button, x, y, .. } => {
                     match button {
                         sdl2::mouse::MouseButton::Left => {
-                            let (old_x, old_y) = (cursor.x, cursor.y);
+                            let (old_x, old_y) = (cursor.x, cursor.get_absolute_y());
+
                             cursor.move_to(x, y, number_w, &texture_creator, &mut text);
 
-                            println!["old ({},{}) new ({},{})", old_x, old_y, cursor.x, cursor.y];
                             if old_x < cursor.x {
+                                selected.x1 = old_x as usize;
+                                selected.y1 = old_y as usize;
+
+                                selected.x2 = cursor.x as usize;
+                                selected.y2 = cursor.get_absolute_y() as usize;
                                 println!["{}", &text.raw[cursor.get_absolute_y()][old_x as usize..cursor.x as usize]];
                             }
                             else {
+                                selected.x2 = old_x as usize;
+                                selected.y2 = old_y as usize;
+
+                                selected.x1 = cursor.x as usize;
+                                selected.y1 = cursor.get_absolute_y() as usize;
                                 println!["{}", &text.raw[cursor.get_absolute_y()][cursor.x as usize..old_x as usize]];
                             }
+
+                            text.needs_update = true;
                         },
                         _ => {},
                     }
@@ -350,7 +216,7 @@ fn main() {
             let mut x = 0;
             let y = FONT_SIZE*((i-cursor.screen_y as usize) as u16);
 
-            let number = format!["{:1$} ", i+1, number_of_digits(text.raw.len())];
+            let number = format!["{:1$} ", i+1, utils::number_of_digits(text.raw.len())];
             let mut n_iter = number.graphemes(true);
             let mut n = n_iter.next();
             while n != None {
@@ -385,11 +251,15 @@ fn main() {
             let (half, _) = text.raw[cursor.get_absolute_y()].split_at(cursor.x as usize);
             let (x, _) = text.font.size_of(half).unwrap();
             canvas.copy(&cursor.texture, None, Some(rect![x+number_w-2, cursor.y*(FONT_SIZE as u32), 4, FONT_SIZE])).unwrap();
-        }{
+        }
+
+        {
             canvas.set_draw_color(BAR_COLOR);
             let _ = canvas.fill_rect(rect![0, w_height - FONT_SIZE as u32, w_width, FONT_SIZE]);
             canvas.set_draw_color(BG_COLOR);
-        }{
+        }
+
+        {
             let lines_ui = format!["{}/{}", cursor.get_absolute_y()+1, text.raw.len()];
             let mut n_iter = lines_ui.graphemes(true);
             let mut n = n_iter.next();
@@ -406,42 +276,20 @@ fn main() {
             }
         }
 
+        {
+            canvas.set_draw_color(SELECT_COLOR);
+            let (half, _) = text.raw[selected.y1].split_at(selected.x1);
+            let (x1, _) = text.font.size_of(half).unwrap();
+
+            let (half, _) = text.raw[selected.y2].split_at(selected.x2);
+            let (x2, _) = text.font.size_of(half).unwrap();
+
+            let _ = canvas.fill_rect(rect![x1+number_w-2, selected.y1*FONT_SIZE as usize, x2-x1, (selected.y2-selected.y1+1)*FONT_SIZE as usize]);
+            canvas.set_draw_color(BG_COLOR);
+        }
+
         canvas.present();
 
         text.needs_update = false;
     }
-}
-
-fn read_file(path: &str) -> String {
-    let mut file = std::fs::File::open(path).unwrap();
-    let mut s = String::new();
-    let _ = file.read_to_string(&mut s);
-
-    s
-}
-
-fn save_file(path: &str, buffer: &Vec<String>) {
-    let mut file = std::fs::File::create(path).unwrap();
-    let mut s = String::new();
-
-    for l in buffer.iter() {
-        s.push_str(l);
-        s.push_str("\n");
-    }
-
-    let result = file.write(&s.into_bytes());
-    match result {
-        Ok(_) => {},
-        Err(e) => println!["{}", e],
-    }
-}
-
-fn number_of_digits(n: usize) -> usize {
-    let mut i = 0;
-    let mut n = n;
-    while n != 0 {
-        n /= 10;
-        i += 1;
-    }
-    i
 }

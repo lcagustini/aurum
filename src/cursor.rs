@@ -1,0 +1,129 @@
+extern crate sdl2;
+extern crate unicode_segmentation;
+
+use sdl2::render::{Texture, TextureCreator, Canvas};
+use sdl2::video::{Window, WindowContext};
+
+use unicode_segmentation::UnicodeSegmentation;
+
+use ::FONT_SIZE;
+use ::text;
+
+pub struct Cursor<'r> {
+    pub x: u32,
+    pub y: u32,
+    pub wanted_x: u32,
+    pub screen_y: u32,
+    pub texture: Texture<'r>,
+}
+impl<'r> Cursor<'r> {
+    pub fn new(x: u32, y: u32, texture_creator: &'r TextureCreator<WindowContext>) -> Cursor<'r> {
+        let mut cursor_surface = sdl2::surface::Surface::new((6*FONT_SIZE/10) as u32, FONT_SIZE as u32, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
+        cursor_surface.fill_rect(rect![0, 0, 4, FONT_SIZE], sdl2::pixels::Color::RGBA(255, 255, 255, 128)).unwrap();
+
+        Cursor{ x: x, y: y, wanted_x: x, screen_y: 0, texture: texture_creator.create_texture_from_surface(cursor_surface).unwrap() }
+    }
+
+    pub fn up(&mut self, text: &Vec<String>, canvas: &Canvas<Window>) {
+        if self.y > 0 {
+            self.y -= 1;
+            self.x = if self.wanted_x > text[self.get_absolute_y()].len() as u32 {
+                text[self.get_absolute_y()].len() as u32
+            }
+            else {
+                self.wanted_x
+            };
+        }
+        else if self.get_absolute_y() > 0 {
+            self.scroll_screen(canvas, text, 1);
+            self.up(text, canvas);
+        }
+    }
+
+    pub fn down(&mut self, text: &Vec<String>, canvas: &Canvas<Window>) {
+        if self.get_absolute_y() < text.len()-1 && self.y < (canvas.window().size().1/FONT_SIZE as u32)-2 {
+            self.y += 1;
+            self.x = if self.wanted_x > text[self.get_absolute_y()].len() as u32 {
+                text[self.get_absolute_y()].len() as u32
+            }
+            else {
+                self.wanted_x
+            };
+        }
+        else if self.get_absolute_y() < text.len()-1 {
+            self.scroll_screen(canvas, text, -1);
+            self.down(text, canvas);
+        }
+    }
+
+    pub fn left(&mut self, text: &Vec<String>) {
+        if self.x > 0 {
+            self.x -= 1;
+            while !text[self.get_absolute_y()].is_char_boundary(self.x as usize) {
+                self.x -= 1;
+            }
+            self.wanted_x = self.x;
+        }
+    }
+
+    pub fn right(&mut self, text: &Vec<String>) {
+        if self.x < text[self.get_absolute_y()].len() as u32 {
+            self.x += 1;
+            while !text[self.get_absolute_y()].is_char_boundary(self.x as usize) {
+                self.x += 1;
+            }
+            self.wanted_x = self.x;
+        }
+    }
+
+    pub fn get_absolute_y(&self) -> usize {
+        (self.y + self.screen_y) as usize
+    }
+
+    pub fn scroll_screen(&mut self, canvas: &Canvas<Window>, text: &Vec<String>, dir: i32) {
+        if (self.screen_y > 0 && dir > 0) || (self.screen_y < (text.len()-1) as u32 && dir < 0) {
+            self.screen_y = if dir > 0 { self.screen_y - 1 } else { self.screen_y + 1 };
+            if (self.y > 0 && dir < 0) || (self.y < (canvas.window().size().1/FONT_SIZE as u32)-2 && dir > 0) {
+                if dir > 0 {
+                    self.down(text, canvas);
+                }
+                else {
+                    self.up(text, canvas);
+                };
+            }
+            else {
+                self.x = if self.wanted_x > text[self.get_absolute_y()].len() as u32 {
+                    text[self.get_absolute_y()].len() as u32
+                }
+                else {
+                    self.wanted_x
+                };
+            }
+        }
+    }
+
+    pub fn move_to(&mut self, x: i32, y: i32, number_w: u32, texture_creator: &'r TextureCreator<WindowContext>, text: &mut text::Text<'_, 'r>) {
+        self.y = (y/FONT_SIZE as i32) as u32;
+
+        let mut width = 0;
+        let mut len = 0;
+        let line = text.raw[self.get_absolute_y()].clone();
+        let mut c_iter = line.graphemes(true);
+        let mut c = c_iter.next();
+        while c != None {
+            let cur = c.unwrap();
+            let texture = text.get_normal_char(&cur, &texture_creator);
+            let texture_info = texture.query();
+
+            width += texture_info.width;
+            len += cur.len() as u32;
+            if ((x-number_w as i32)-width as i32).abs() < FONT_SIZE as i32/2 {
+                break;
+            }
+
+            c = c_iter.next();
+        }
+        self.x = len;
+        text.needs_update = true;
+    }
+}
