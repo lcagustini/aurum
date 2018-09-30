@@ -95,6 +95,12 @@ fn main() {
                     }
                 },
 
+                Event::KeyDown { keycode: Some(Keycode::S), keymod, .. } => {
+                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                        utils::save_file(&args[1], &text.raw);
+                    }
+                },
+
                 Event::KeyDown { keycode: Some(Keycode::V), keymod, .. } => {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
                         let input = video_subsystem.clipboard().clipboard_text().unwrap();
@@ -143,10 +149,6 @@ fn main() {
                         }
                     }
                     text.needs_update = true;
-                },
-
-                Event::KeyDown { keycode: Some(Keycode::F5), .. } => {
-                    utils::save_file(&args[1], &text.raw);
                 },
 
                 Event::TextInput { text: input, .. } => {
@@ -272,18 +274,20 @@ fn main() {
 
         //Draw text selection
         {
-            let (half, _) = text.raw[selected.y1].split_at(selected.x1);
-            let (x1, _) = text.font.size_of(half).unwrap();
+            if selected.x1 < text.raw[selected.y1].len() && selected.x2 < text.raw[selected.y2].len() {
+                let (half, _) = text.raw[selected.y1].split_at(selected.x1);
+                let (x1, _) = text.font.size_of(half).unwrap();
 
-            let (half, _) = text.raw[selected.y2].split_at(selected.x2);
-            let (x2, _) = text.font.size_of(half).unwrap();
+                let (half, _) = text.raw[selected.y2].split_at(selected.x2);
+                let (x2, _) = text.font.size_of(half).unwrap();
 
-            if x2-x1 > 0 {
-                let mut surface = sdl2::surface::Surface::new(x2-x1, ((selected.y2-selected.y1+1)*FONT_SIZE as usize) as u32, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
-                surface.fill_rect(None, SELECT_COLOR).unwrap();
-                let texture = texture_creator.create_texture_from_surface(surface).unwrap();
+                if x2-x1 > 0 {
+                    let mut surface = sdl2::surface::Surface::new(x2-x1, ((selected.y2-selected.y1+1)*FONT_SIZE as usize) as u32, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
+                    surface.fill_rect(None, SELECT_COLOR).unwrap();
+                    let texture = texture_creator.create_texture_from_surface(surface).unwrap();
 
-                canvas.copy(&texture, None, Some(rect![x1+cursor.number_w, selected.y1*FONT_SIZE as usize, x2-x1, (selected.y2-selected.y1+1)*FONT_SIZE as usize])).unwrap();
+                    canvas.copy(&texture, None, Some(rect![x1+cursor.number_w, selected.y1*FONT_SIZE as usize, x2-x1, (selected.y2-selected.y1+1)*FONT_SIZE as usize])).unwrap();
+                }
             }
         }
 
