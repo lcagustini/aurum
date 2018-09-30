@@ -20,13 +20,8 @@ const FONT_SIZE: u16 = 20;
 mod utils;
 mod text;
 mod cursor;
-
-struct Select {
-    x1: usize,
-    y1: usize,
-    x2: usize,
-    y2: usize,
-}
+mod select;
+mod undo;
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -50,12 +45,10 @@ fn main() {
 
     let lines: Vec<String> = utils::read_file(&args[1]).split("\n").map(|x| x.to_owned()).collect();
 
-    canvas.set_draw_color(BG_COLOR);
-
     let mut text = text::Text::new(font, lines);
-
     let mut cursor = cursor::Cursor::new(0, 0, &texture_creator);
-    let mut selected = Select{x1: 0, y1: 0, x2: 0, y2: 0};
+    let mut selected = select::Select{x1: 0, y1: 0, x2: 0, y2: 0};
+    let mut undo_handler = undo::UndoHandler::new(&cursor, &text);
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
@@ -85,16 +78,30 @@ fn main() {
                     text.needs_update = true;
                 },
 
-                Event::KeyDown { keycode: Some(Keycode::C), keymod, .. } => {
-                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
-                        let text = &text.raw[selected.y1][selected.x1..selected.x2];
-                        video_subsystem.clipboard().set_clipboard_text(text).unwrap();
-                    }
-                },
-
                 Event::KeyDown { keycode: Some(Keycode::S), keymod, .. } => {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
                         utils::save_file(&args[1], &text.raw);
+                    }
+                },
+
+                Event::KeyDown { keycode: Some(Keycode::Z), keymod, .. } => {
+                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                        undo_handler.restore_previous_state(&mut cursor, &mut text);
+                        text.needs_update = true;
+                    }
+                },
+
+                Event::KeyDown { keycode: Some(Keycode::Y), keymod, .. } => {
+                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                        undo_handler.restore_next_state(&mut cursor, &mut text);
+                        text.needs_update = true;
+                    }
+                },
+
+                Event::KeyDown { keycode: Some(Keycode::C), keymod, .. } => {
+                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                        let text = selected.get_selected_text(&text);
+                        video_subsystem.clipboard().set_clipboard_text(&text).unwrap();
                     }
                 },
 
@@ -120,6 +127,9 @@ fn main() {
                     cursor.x = 0;
                     cursor.wanted_x = 0;
                     cursor.y += 1;
+
+                    undo_handler.create_state(&cursor, &text);
+
                     text.needs_update = true;
                 },
 
@@ -223,6 +233,7 @@ fn main() {
 
             continue;
         }
+        canvas.set_draw_color(BG_COLOR);
         canvas.clear();
 
         let (w_width, w_height) = canvas.window().size();
@@ -300,7 +311,6 @@ fn main() {
         {
             canvas.set_draw_color(BAR_COLOR);
             canvas.fill_rect(rect![0, w_height - text.font_size as u32, w_width, text.font_size]).unwrap();
-            canvas.set_draw_color(BG_COLOR);
 
             let lines_ui = format!["{}/{}", cursor.get_absolute_y()+1, text.raw.len()];
             let mut n_iter = lines_ui.graphemes(true);
