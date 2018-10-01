@@ -125,13 +125,17 @@ fn main() {
                     }
                 },
 
-                // TODO: deal with \n on clipboard text
                 Event::KeyDown { keycode: Some(Keycode::V), keymod, .. } => {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
-                        let input = video_subsystem.clipboard().clipboard_text().unwrap();
+                        let input: Vec<String> = video_subsystem.clipboard().clipboard_text().unwrap().split("\n").map(|x| x.to_owned()).collect();
 
-                        text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, &input);
-                        cursor.x += input.len() as u32;
+                        for line in input {
+                            text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, &line);
+                            text.raw.insert(cursor.get_absolute_y()+1, "".to_owned());
+                            cursor.x += line.len() as u32;
+                            cursor.down(&text.raw, &canvas);
+                        }
+                        undo_handler.create_state(&cursor, &text);
                         text.needs_update = true;
                     }
                 },
@@ -150,7 +154,6 @@ fn main() {
                     cursor.y += 1;
 
                     undo_handler.create_state(&cursor, &text);
-
                     text.needs_update = true;
                 },
 
@@ -314,36 +317,40 @@ fn main() {
         //Draw text selection
         // TODO: transparent selection box
         {
-            if selected.x1 < text.raw[selected.y1].len() && selected.x2 < text.raw[selected.y2].len() {
+            if selected.x1 != selected.x2 || selected.y1 != selected.y2 {
                 let (half, _) = text.raw[selected.y1].split_at(selected.x1);
                 let (x1, _) = text.font.size_of(half).unwrap();
 
-                let (half, _) = text.raw[selected.y2].split_at(selected.x2);
-                let (x2, _) = text.font.size_of(half).unwrap();
-
-                if x2-x1 > 0 {
-                    canvas.set_draw_color(SELECT_COLOR);
-                    if selected.y1 == selected.y2 {
-                        canvas.draw_rect(rect![x1+cursor.number_w, selected.y1*text.font_size as usize, x2-x1, text.font_size as usize]).unwrap();
+                let (half, _) =
+                    if selected.x2 < text.raw[selected.y2].len() {
+                        text.raw[selected.y2].split_at(selected.x2)
                     }
                     else {
-                        for i in selected.y1..=selected.y2 {
-                            let mut start = cursor.number_w;
-                            let mut end = cursor.number_w;
-                            let (all, _) = text.font.size_of(&text.raw[i][..]).unwrap();
+                        (&text.raw[selected.y2][..], "")
+                    };
+                let (x2, _) = text.font.size_of(half).unwrap();
 
-                            if i == selected.y1 {
-                                start += x1;
-                                end += all;
-                            }
-                            else if i == selected.y2 {
-                                end += x2;
-                            }
-                            else {
-                                end += all;
-                            }
-                            canvas.draw_rect(rect![start, i*text.font_size as usize, end-start, text.font_size as usize]).unwrap();
+                canvas.set_draw_color(SELECT_COLOR);
+                if selected.y1 == selected.y2 {
+                    canvas.draw_rect(rect![x1+cursor.number_w, selected.y1*text.font_size as usize, x2-x1, text.font_size as usize]).unwrap();
+                }
+                else {
+                    for i in selected.y1..=selected.y2 {
+                        let mut start = cursor.number_w;
+                        let mut end = cursor.number_w;
+                        let (all, _) = text.font.size_of(&text.raw[i][..]).unwrap();
+
+                        if i == selected.y1 {
+                            start += x1;
+                            end += all;
                         }
+                        else if i == selected.y2 {
+                            end += x2;
+                        }
+                        else {
+                            end += all;
+                        }
+                        canvas.draw_rect(rect![start, i*text.font_size as usize, end-start, text.font_size as usize]).unwrap();
                     }
                 }
             }
