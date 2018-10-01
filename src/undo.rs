@@ -43,6 +43,11 @@ impl UndoHandler {
         self.cur_state += 1;
     }
 
+    pub fn clear_states(&mut self) {
+        self.cur_state = 0;
+        self.states.clear();
+    }
+
     pub fn restore_previous_state(&mut self, cursor: &mut cursor::Cursor, text: &mut text::Text) {
         if self.cur_state > 0 {
             self.cur_state -= 1;

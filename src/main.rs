@@ -61,7 +61,7 @@ fn main() {
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit {..} | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                Event::Quit {..} => {
                     break 'running
                 },
 
@@ -93,13 +93,18 @@ fn main() {
                             nfd::Response::Okay(file_path) => {
                                 text.raw = utils::read_file(&file_path).split("\n").map(|x| x.to_owned()).collect();
                                 text.file_path = file_path;
+
+                                cursor.x = 0;
+                                cursor.y = 0;
+
+                                undo_handler.clear_states();
+                                undo_handler.create_state(&cursor, &text);
+
+                                text.needs_update = true;
                             },
 
                             _ => ()
                         }
-                        cursor.x = 0;
-                        cursor.y = 0;
-                        text.needs_update = true;
                     }
                 },
 
@@ -114,6 +119,7 @@ fn main() {
                                 nfd::Response::Okay(file_path) => {
                                     utils::save_file(&file_path, &text.raw);
                                     text.file_path = file_path;
+
                                     text.needs_update = true;
                                 },
 
