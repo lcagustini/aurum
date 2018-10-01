@@ -1,5 +1,6 @@
 extern crate sdl2;
 extern crate unicode_segmentation;
+extern crate nfd;
 
 use sdl2::pixels::Color;
 use sdl2::event::Event;
@@ -43,9 +44,15 @@ fn main() {
     let mut canvas = window.into_canvas().build().unwrap();
     let texture_creator = canvas.texture_creator();
 
-    let lines: Vec<String> = utils::read_file(&args[1]).split("\n").map(|x| x.to_owned()).collect();
+    let lines: Vec<String> =
+        if args.len() > 1 {
+            utils::read_file(&args[1]).split("\n").map(|x| x.to_owned()).collect()
+        }
+        else {
+            vec!["".to_owned()]
+        };
 
-    let mut text = text::Text::new(font, lines);
+    let mut text = text::Text::new(font, lines, args);
     let mut cursor = cursor::Cursor::new(0, 0, &texture_creator);
     let mut selected = select::Select{x1: 0, y1: 0, x2: 0, y2: 0};
     let mut undo_handler = undo::UndoHandler::new(&cursor, &text);
@@ -78,22 +85,35 @@ fn main() {
                     text.needs_update = true;
                 },
 
-                Event::KeyDown { keycode: Some(Keycode::S), keymod, .. } => {
+                Event::KeyDown { keycode: Some(Keycode::O), keymod, .. } => {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
-                        utils::save_file(&args[1], &text.raw);
-                    }
-                },
-
-                Event::KeyDown { keycode: Some(Keycode::Z), keymod, .. } => {
-                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
-                        undo_handler.restore_previous_state(&mut cursor, &mut text);
+                        let result = nfd::open_file_dialog(None, None).unwrap();
+                        match result {
+                            nfd::Response::Okay(file_path) => text.raw = utils::read_file(&file_path).split("\n").map(|x| x.to_owned()).collect(),
+                            _ => ()
+                        }
                         text.needs_update = true;
                     }
                 },
 
-                Event::KeyDown { keycode: Some(Keycode::Y), keymod, .. } => {
+                Event::KeyDown { keycode: Some(Keycode::S), keymod, .. } => {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                        if text.file_path != "" {
+                            utils::save_file(&text.file_path, &text.raw);
+                        }
+                    }
+                },
+
+                Event::KeyDown { keycode: Some(Keycode::Z), keymod, .. } => {
+                    let mut ctrl_shift = sdl2::keyboard::LCTRLMOD;
+                    ctrl_shift.insert(sdl2::keyboard::LSHIFTMOD);
+
+                    if keymod.contains(ctrl_shift) {
                         undo_handler.restore_next_state(&mut cursor, &mut text);
+                        text.needs_update = true;
+                    }
+                    else if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                        undo_handler.restore_previous_state(&mut cursor, &mut text);
                         text.needs_update = true;
                     }
                 },
@@ -268,6 +288,9 @@ fn main() {
                 let line = text.raw[i].clone();
                 let mut c_iter = line.graphemes(true);
                 let mut c = c_iter.next();
+                for _ in 0..cursor.screen_x {
+                    c = c_iter.next();
+                }
                 while c != None {
                     let texture = text.get_normal_char(c.unwrap(), &texture_creator);
                     let texture_info = texture.query();
@@ -281,6 +304,7 @@ fn main() {
         }
 
         //Draw text selection
+        // TODO: fix selection box
         {
             if selected.x1 < text.raw[selected.y1].len() && selected.x2 < text.raw[selected.y2].len() {
                 let (half, _) = text.raw[selected.y1].split_at(selected.x1);
