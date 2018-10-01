@@ -14,7 +14,7 @@ macro_rules! rect(($x:expr, $y:expr, $w:expr, $h:expr) => (sdl2::rect::Rect::new
 
 const BG_COLOR: Color = Color{r: 25, g: 25, b: 25, a: 255};
 const BAR_COLOR: Color = Color{r: 15, g: 15, b: 15, a: 255};
-const SELECT_COLOR: Color = Color{r: 255, g: 255, b: 255, a: 100};
+const SELECT_COLOR: Color = Color{r: 255, g: 255, b: 255, a: 255};
 
 const FONT_SIZE: u16 = 20;
 
@@ -125,6 +125,7 @@ fn main() {
                     }
                 },
 
+                // TODO: deal with \n on clipboard text
                 Event::KeyDown { keycode: Some(Keycode::V), keymod, .. } => {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
                         let input = video_subsystem.clipboard().clipboard_text().unwrap();
@@ -175,6 +176,13 @@ fn main() {
                             cursor.y -= 1;
                         }
                     }
+                    text.needs_update = true;
+                },
+
+                Event::KeyDown { keycode: Some(Keycode::Tab), .. } => {
+                    let input = "    ";
+                    text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, input);
+                    cursor.x += input.len() as u32;
                     text.needs_update = true;
                 },
 
@@ -304,7 +312,7 @@ fn main() {
         }
 
         //Draw text selection
-        // TODO: fix selection box
+        // TODO: transparent selection box
         {
             if selected.x1 < text.raw[selected.y1].len() && selected.x2 < text.raw[selected.y2].len() {
                 let (half, _) = text.raw[selected.y1].split_at(selected.x1);
@@ -314,11 +322,29 @@ fn main() {
                 let (x2, _) = text.font.size_of(half).unwrap();
 
                 if x2-x1 > 0 {
-                    let mut surface = sdl2::surface::Surface::new(x2-x1, ((selected.y2-selected.y1+1)*text.font_size as usize) as u32, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
-                    surface.fill_rect(None, SELECT_COLOR).unwrap();
-                    let texture = texture_creator.create_texture_from_surface(surface).unwrap();
+                    canvas.set_draw_color(SELECT_COLOR);
+                    if selected.y1 == selected.y2 {
+                        canvas.draw_rect(rect![x1+cursor.number_w, selected.y1*text.font_size as usize, x2-x1, text.font_size as usize]).unwrap();
+                    }
+                    else {
+                        for i in selected.y1..=selected.y2 {
+                            let mut start = cursor.number_w;
+                            let mut end = cursor.number_w;
+                            let (all, _) = text.font.size_of(&text.raw[i][..]).unwrap();
 
-                    canvas.copy(&texture, None, Some(rect![x1+cursor.number_w, selected.y1*text.font_size as usize, x2-x1, (selected.y2-selected.y1+1)*text.font_size as usize])).unwrap();
+                            if i == selected.y1 {
+                                start += x1;
+                                end += all;
+                            }
+                            else if i == selected.y2 {
+                                end += x2;
+                            }
+                            else {
+                                end += all;
+                            }
+                            canvas.draw_rect(rect![start, i*text.font_size as usize, end-start, text.font_size as usize]).unwrap();
+                        }
+                    }
                 }
             }
         }
