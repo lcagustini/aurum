@@ -264,8 +264,10 @@ fn main() {
                 },
 
                 Event::Window { win_event: event, .. } => {
+                    println!["{:?}", event];
                     match event {
-                        sdl2::event::WindowEvent::SizeChanged(_, _) => text.needs_update = true,
+                        sdl2::event::WindowEvent::SizeChanged(_, _) | sdl2::event::WindowEvent::FocusGained |
+                            sdl2::event::WindowEvent::Exposed | sdl2::event::WindowEvent::Moved(_, _)=> text.needs_update = true,
                         _ => {},
                     }
                 },
