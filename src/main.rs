@@ -264,7 +264,6 @@ fn main() {
                 },
 
                 Event::Window { win_event: event, .. } => {
-                    println!["{:?}", event];
                     match event {
                         sdl2::event::WindowEvent::SizeChanged(_, _) | sdl2::event::WindowEvent::FocusGained |
                             sdl2::event::WindowEvent::Exposed | sdl2::event::WindowEvent::Moved(_, _)=> text.needs_update = true,
@@ -402,7 +401,7 @@ fn main() {
                     let texture = text.get_normal_char(n.unwrap(), &texture_creator);
                     let texture_info = texture.query();
 
-                    canvas.copy(texture, None, Some(rect![x, w_height-f_s as u32, texture_info.width, texture_info.height])).unwrap();
+                    canvas.copy(&texture, None, Some(rect![x, w_height-f_s as u32, texture_info.width, texture_info.height])).unwrap();
 
                     n = n_iter.next();
 

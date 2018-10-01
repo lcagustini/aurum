@@ -1,0 +1,16 @@
+colors {
+    constant=0xFF0000
+    keyword=0x00FF00
+    preproc=0xFFFF00
+    type=0x0000FF
+    comment=0x00FFFF
+    other=0xFFFFFF
+}
+
+syntax {
+    constant=0.0;0;"*";'*';
+    keyword=for;if;while;else;switch;case;
+    preproc=#*;
+    type=int;float;long;short;double;void;char;
+    comment=//*;
+}
