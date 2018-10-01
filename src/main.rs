@@ -87,11 +87,18 @@ fn main() {
 
                 Event::KeyDown { keycode: Some(Keycode::O), keymod, .. } => {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
-                        let result = nfd::open_file_dialog(None, None).unwrap();
+                        let dir = text.get_text_dir();
+                        let result = nfd::open_file_dialog(None, Some(&dir)).unwrap();
                         match result {
-                            nfd::Response::Okay(file_path) => text.raw = utils::read_file(&file_path).split("\n").map(|x| x.to_owned()).collect(),
+                            nfd::Response::Okay(file_path) => {
+                                text.raw = utils::read_file(&file_path).split("\n").map(|x| x.to_owned()).collect();
+                                text.file_path = file_path;
+                            },
+
                             _ => ()
                         }
+                        cursor.x = 0;
+                        cursor.y = 0;
                         text.needs_update = true;
                     }
                 },
@@ -100,6 +107,18 @@ fn main() {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
                         if text.file_path != "" {
                             utils::save_file(&text.file_path, &text.raw);
+                        }
+                        else {
+                            let result = nfd::open_save_dialog(None, None).unwrap();
+                            match result {
+                                nfd::Response::Okay(file_path) => {
+                                    utils::save_file(&file_path, &text.raw);
+                                    text.file_path = file_path;
+                                    text.needs_update = true;
+                                },
+
+                                _ => ()
+                            }
                         }
                     }
                 },
@@ -369,21 +388,43 @@ fn main() {
             canvas.set_draw_color(BAR_COLOR);
             canvas.fill_rect(rect![0, w_height - text.font_size as u32, w_width, text.font_size]).unwrap();
 
-            let lines_ui = format!["{}/{}", cursor.get_absolute_y()+1, text.raw.len()];
-            let mut n_iter = lines_ui.graphemes(true);
-            let mut n = n_iter.next();
-            let mut x = w_width-text.font.size_of(&lines_ui).unwrap().0-10;
-            while n != None {
-                let f_s = text.font_size;
+            //Right aligned
+            {
+                let lines_ui = format!["{}/{}: {}", cursor.get_absolute_y()+1, text.raw.len(), cursor.x];
+                let mut n_iter = lines_ui.graphemes(true);
+                let mut n = n_iter.next();
+                let mut x = w_width-text.font.size_of(&lines_ui).unwrap().0-10;
+                while n != None {
+                    let f_s = text.font_size;
 
-                let texture = text.get_normal_char(n.unwrap(), &texture_creator);
-                let texture_info = texture.query();
+                    let texture = text.get_normal_char(n.unwrap(), &texture_creator);
+                    let texture_info = texture.query();
 
-                canvas.copy(texture, None, Some(rect![x, w_height-f_s as u32, texture_info.width, texture_info.height])).unwrap();
+                    canvas.copy(texture, None, Some(rect![x, w_height-f_s as u32, texture_info.width, texture_info.height])).unwrap();
 
-                n = n_iter.next();
+                    n = n_iter.next();
 
-                x += texture_info.width;
+                    x += texture_info.width;
+                }
+            }
+            //Left aligned
+            {
+                let lines_ui = format!["{}: {}", &text.get_text_type(), &text.file_path];
+                let mut n_iter = lines_ui.graphemes(true);
+                let mut n = n_iter.next();
+                let mut x = 10;
+                while n != None {
+                    let f_s = text.font_size;
+
+                    let texture = text.get_normal_char(n.unwrap(), &texture_creator);
+                    let texture_info = texture.query();
+
+                    canvas.copy(texture, None, Some(rect![x, w_height-f_s as u32, texture_info.width, texture_info.height])).unwrap();
+
+                    n = n_iter.next();
+
+                    x += texture_info.width;
+                }
             }
         }
 

@@ -1,8 +1,11 @@
 extern crate sdl2;
+extern crate unicode_segmentation;
 
 use sdl2::pixels::Color;
 use sdl2::render::{Texture, TextureCreator};
 use sdl2::video::WindowContext;
+
+use unicode_segmentation::UnicodeSegmentation;
 
 use std::collections::HashMap;
 
@@ -55,5 +58,36 @@ impl<'ttf, 'a> Text<'ttf, 'a> {
         }
 
         self.normal_character_cache.get(character).unwrap()
+    }
+
+    pub fn get_text_type(&self) -> String {
+        let mut n_iter = self.file_path.graphemes(true).rev();
+        let mut n = n_iter.next();
+        let mut ext = "".to_owned();
+        while n != None {
+            if n.unwrap() == "." {
+                return ext;
+            }
+            else if n.unwrap() == "/" {
+                break;
+            }
+            else {
+                ext.insert_str(0, n.unwrap());
+            }
+            n = n_iter.next();
+        }
+        return "?".to_owned();
+    }
+
+    pub fn get_text_dir(&self) -> String {
+        let mut n_iter = self.file_path.graphemes(true).rev();
+        let mut n = n_iter.next();
+        while n != None {
+            if n.unwrap() == "/" {
+                return n_iter.rev().collect();
+            }
+            n = n_iter.next();
+        }
+        return "~".to_owned();
     }
 }
