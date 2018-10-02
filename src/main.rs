@@ -24,43 +24,7 @@ mod text;
 mod cursor;
 mod select;
 mod undo;
-
-struct SearchHandler {
-    active: bool,
-    search_string: String,
-
-    cur_index: usize,
-    found_places: Vec<(u32, u32)>
-}
-impl SearchHandler {
-    fn new() -> SearchHandler {
-        SearchHandler{active: false, search_string: "".to_owned(), cur_index: 0, found_places: Vec::new()}
-    }
-
-    fn find_search_string(&mut self, text: &Vec<String>) {
-        self.found_places.clear();
-        self.cur_index = 0;
-        for (y, line) in text.iter().enumerate() {
-            let r = line.find(&self.search_string);
-            match r {
-                Some(x) => self.found_places.push((x as u32, y as u32)),
-                _ => ()
-            }
-        }
-    }
-
-    fn next_string_pos(&mut self) -> Option<(u32, u32)> {
-        if self.found_places.len() > 0 {
-            let ret = self.found_places[self.cur_index];
-            self.cur_index += 1;
-            if self.cur_index == self.found_places.len() {
-                self.cur_index = 0;
-            }
-            return Some(ret);
-        }
-        return None
-    }
-}
+mod search;
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -94,7 +58,7 @@ fn main() {
     let mut cursor = cursor::Cursor::new(0, 0, &texture_creator);
     let mut selected = select::SelectHandler{x1: 0, y1: 0, x2: 0, y2: 0};
     let mut undo_handler = undo::UndoHandler::new(&cursor, &text);
-    let mut search_handler = SearchHandler::new();
+    let mut search_handler = search::SearchHandler::new();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
