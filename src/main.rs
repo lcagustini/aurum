@@ -15,6 +15,7 @@ macro_rules! rect(($x:expr, $y:expr, $w:expr, $h:expr) => (sdl2::rect::Rect::new
 const BG_COLOR: Color = Color{r: 25, g: 25, b: 25, a: 255};
 const BAR_COLOR: Color = Color{r: 15, g: 15, b: 15, a: 255};
 const SELECT_COLOR: Color = Color{r: 255, g: 255, b: 255, a: 255};
+const SEARCH_COLOR: Color = Color{r: 255, g: 255, b: 30, a: 255};
 
 const FONT_SIZE: u16 = 20;
 
@@ -23,6 +24,43 @@ mod text;
 mod cursor;
 mod select;
 mod undo;
+
+struct SearchHandler {
+    active: bool,
+    search_string: String,
+
+    cur_index: usize,
+    found_places: Vec<(u32, u32)>
+}
+impl SearchHandler {
+    fn new() -> SearchHandler {
+        SearchHandler{active: false, search_string: "".to_owned(), cur_index: 0, found_places: Vec::new()}
+    }
+
+    fn find_search_string(&mut self, text: &Vec<String>) {
+        self.found_places.clear();
+        self.cur_index = 0;
+        for (y, line) in text.iter().enumerate() {
+            let r = line.find(&self.search_string);
+            match r {
+                Some(x) => self.found_places.push((x as u32, y as u32)),
+                _ => ()
+            }
+        }
+    }
+
+    fn next_string_pos(&mut self) -> Option<(u32, u32)> {
+        if self.found_places.len() > 0 {
+            let ret = self.found_places[self.cur_index];
+            self.cur_index += 1;
+            if self.cur_index == self.found_places.len() {
+                self.cur_index = 0;
+            }
+            return Some(ret);
+        }
+        return None
+    }
+}
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -54,8 +92,9 @@ fn main() {
 
     let mut text = text::Text::new(font, lines, args);
     let mut cursor = cursor::Cursor::new(0, 0, &texture_creator);
-    let mut selected = select::Select{x1: 0, y1: 0, x2: 0, y2: 0};
+    let mut selected = select::SelectHandler{x1: 0, y1: 0, x2: 0, y2: 0};
     let mut undo_handler = undo::UndoHandler::new(&cursor, &text);
+    let mut search_handler = SearchHandler::new();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
@@ -143,80 +182,130 @@ fn main() {
                     }
                 },
 
+                Event::KeyDown { keycode: Some(Keycode::F), keymod, .. } => {
+                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                        search_handler.active = !search_handler.active;
+                        search_handler.search_string.clear();
+
+                        text.needs_update = true;
+                    }
+                },
+
                 Event::KeyDown { keycode: Some(Keycode::C), keymod, .. } => {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
-                        let text = selected.get_selected_text(&text);
-                        video_subsystem.clipboard().set_clipboard_text(&text).unwrap();
+                        if !search_handler.active {
+                            let text = selected.get_selected_text(&text);
+                            video_subsystem.clipboard().set_clipboard_text(&text).unwrap();
+                        }
                     }
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::V), keymod, .. } => {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
-                        let input: Vec<String> = video_subsystem.clipboard().clipboard_text().unwrap().split("\n").map(|x| x.to_owned()).collect();
+                        if !search_handler.active {
+                            let input: Vec<String> = video_subsystem.clipboard().clipboard_text().unwrap().split("\n").map(|x| x.to_owned()).collect();
 
-                        for line in input {
-                            text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, &line);
-                            text.raw.insert(cursor.get_absolute_y()+1, "".to_owned());
-                            cursor.x += line.len() as u32;
-                            cursor.down(&text.raw, &canvas);
+                            for line in input {
+                                text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, &line);
+                                text.raw.insert(cursor.get_absolute_y()+1, "".to_owned());
+                                cursor.x += line.len() as u32;
+                                cursor.down(&text.raw, &canvas);
+                            }
+                            undo_handler.create_state(&cursor, &text);
+                            text.needs_update = true;
                         }
-                        undo_handler.create_state(&cursor, &text);
-                        text.needs_update = true;
                     }
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Return), .. } => {
-                    text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, "\n");
+                    if search_handler.active {
+                        match search_handler.next_string_pos() {
+                            Some((x, y)) => {
+                                while cursor.get_absolute_y() > y as usize {
+                                    cursor.up(&text.raw, &canvas);
+                                }
 
-                    let halves: Vec<String> = text.raw[cursor.get_absolute_y()].split("\n").map(|x| x.to_owned()).collect();
+                                while cursor.get_absolute_y() < y as usize {
+                                    cursor.down(&text.raw, &canvas);
+                                }
 
-                    text.raw[cursor.get_absolute_y()] = halves[0].clone();
+                                while cursor.x > x {
+                                    cursor.left(&text.raw);
+                                }
 
-                    text.raw.insert((cursor.get_absolute_y()+1) as usize, halves[1].clone());
+                                while cursor.x < x {
+                                    cursor.right(&text.raw);
+                                }
+                            },
+                            None => (),
+                        }
+                    }
+                    else {
+                        text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, "\n");
 
-                    cursor.x = 0;
-                    cursor.wanted_x = 0;
-                    cursor.y += 1;
+                        let halves: Vec<String> = text.raw[cursor.get_absolute_y()].split("\n").map(|x| x.to_owned()).collect();
 
-                    undo_handler.create_state(&cursor, &text);
+                        text.raw[cursor.get_absolute_y()] = halves[0].clone();
+
+                        text.raw.insert((cursor.get_absolute_y()+1) as usize, halves[1].clone());
+
+                        cursor.x = 0;
+                        cursor.wanted_x = 0;
+                        cursor.y += 1;
+
+                        undo_handler.create_state(&cursor, &text);
+                    }
                     text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Backspace), .. } => {
-                    if cursor.x > 0 {
-                        cursor.left(&text.raw);
-                        text.raw[cursor.get_absolute_y()].remove(cursor.x as usize);
+                    if search_handler.active {
+                        search_handler.search_string.pop();
                     }
-                    else if cursor.x == 0 && cursor.get_absolute_y() > 0 {
-                        let line = text.raw[cursor.get_absolute_y()].clone();
-
-                        cursor.x = text.raw[cursor.get_absolute_y()-1].len() as u32;
-                        cursor.wanted_x = cursor.x;
-
-                        text.raw[cursor.get_absolute_y()-1].push_str(&line);
-
-                        text.raw.remove(cursor.get_absolute_y());
-
-                        if cursor.y == 0 {
-                            cursor.screen_y -= 1;
+                    else {
+                        if cursor.x > 0 {
+                            cursor.left(&text.raw);
+                            text.raw[cursor.get_absolute_y()].remove(cursor.x as usize);
                         }
-                        else {
-                            cursor.y -= 1;
+                        else if cursor.x == 0 && cursor.get_absolute_y() > 0 {
+                            let line = text.raw[cursor.get_absolute_y()].clone();
+
+                            cursor.x = text.raw[cursor.get_absolute_y()-1].len() as u32;
+                            cursor.wanted_x = cursor.x;
+
+                            text.raw[cursor.get_absolute_y()-1].push_str(&line);
+
+                            text.raw.remove(cursor.get_absolute_y());
+
+                            if cursor.y == 0 {
+                                cursor.screen_y -= 1;
+                            }
+                            else {
+                                cursor.y -= 1;
+                            }
                         }
                     }
                     text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Tab), .. } => {
-                    let input = "    ";
-                    text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, input);
-                    cursor.x += input.len() as u32;
-                    text.needs_update = true;
+                    if !search_handler.active {
+                        let input = "    ";
+                        text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, input);
+                        cursor.x += input.len() as u32;
+                        text.needs_update = true;
+                    }
                 },
 
                 Event::TextInput { text: input, .. } => {
-                    text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, &input);
-                    cursor.x += input.len() as u32;
+                    if search_handler.active {
+                        search_handler.search_string.push_str(&input);
+                        search_handler.find_search_string(&text.raw);
+                    }
+                    else {
+                        text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, &input);
+                        cursor.x += input.len() as u32;
+                    }
                     text.needs_update = true;
                 },
 
@@ -358,7 +447,7 @@ fn main() {
 
                 canvas.set_draw_color(SELECT_COLOR);
                 if selected.y1 == selected.y2 {
-                    canvas.draw_rect(rect![x1+cursor.number_w, selected.y1*text.font_size as usize, x2-x1, text.font_size as usize]).unwrap();
+                    canvas.draw_rect(rect![x1+cursor.number_w, selected.y1*text.font_size as usize, x2-x1, text.font_size]).unwrap();
                 }
                 else {
                     for i in selected.y1..=selected.y2 {
@@ -376,7 +465,23 @@ fn main() {
                         else {
                             end += all;
                         }
-                        canvas.draw_rect(rect![start, i*text.font_size as usize, end-start, text.font_size as usize]).unwrap();
+                        canvas.draw_rect(rect![start, i*text.font_size as usize, end-start, text.font_size]).unwrap();
+                    }
+                }
+            }
+        }
+
+        //Draw search highlight
+        {
+            if search_handler.active {
+                for (x, y) in &search_handler.found_places {
+                    if y.clone() >= cursor.screen_y {
+                        let (half, _) = text.raw[y.clone() as usize].split_at(x.clone() as usize);
+                        let (x1, _) = text.font.size_of(half).unwrap();
+                        let (w, _) = text.font.size_of(&search_handler.search_string).unwrap();
+
+                        canvas.set_draw_color(SEARCH_COLOR);
+                        canvas.draw_rect(rect![x1+cursor.number_w, (y-cursor.screen_y)*text.font_size as u32, w, text.font_size]).unwrap();
                     }
                 }
             }
@@ -397,7 +502,7 @@ fn main() {
 
             //Right aligned
             {
-                let lines_ui = format!["{}/{}: {}", cursor.get_absolute_y()+1, text.raw.len(), cursor.x];
+                let lines_ui = format!["{}/{}: {}", cursor.get_absolute_y()+1, text.raw.len(), cursor.x+1];
                 let mut n_iter = lines_ui.graphemes(true);
                 let mut n = n_iter.next();
                 let mut x = w_width-text.font.size_of(&lines_ui).unwrap().0-10;
@@ -416,7 +521,14 @@ fn main() {
             }
             //Left aligned
             {
-                let lines_ui = format!["{}: {}", &text.get_text_type(), &text.file_path];
+                let lines_ui =
+                    if search_handler.active {
+                        format!["Search: {}", &search_handler.search_string]
+                    }
+                    else { 
+                        format!["{}: {}", &text.get_text_type(), &text.file_path]
+                    };
+
                 let mut n_iter = lines_ui.graphemes(true);
                 let mut n = n_iter.next();
                 let mut x = 10;
