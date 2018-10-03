@@ -1,12 +1,14 @@
 extern crate sdl2;
 extern crate unicode_segmentation;
 
-use sdl2::render::{Texture, TextureCreator, Canvas};
+use sdl2::render::{TextureCreator, Canvas};
 use sdl2::video::{Window, WindowContext};
 
 use unicode_segmentation::UnicodeSegmentation;
 
 use ::FONT_SIZE;
+use ::CURSOR_WIDTH;
+
 use ::text;
 
 pub struct Cursor<'r> {
@@ -19,14 +21,14 @@ pub struct Cursor<'r> {
     pub screen_x: u32,
     pub screen_y: u32,
 
-    pub texture: Texture<'r>,
+    pub surface: sdl2::surface::Surface<'r>,
 }
 impl<'r> Cursor<'r> {
-    pub fn new(x: u32, y: u32, texture_creator: &'r TextureCreator<WindowContext>) -> Cursor<'r> {
+    pub fn new(x: u32, y: u32) -> Cursor<'r> {
         let mut cursor_surface = sdl2::surface::Surface::new((6*FONT_SIZE/10) as u32, FONT_SIZE as u32, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
-        cursor_surface.fill_rect(rect![0, 0, 4, FONT_SIZE], sdl2::pixels::Color::RGBA(255, 255, 255, 128)).unwrap();
+        cursor_surface.fill_rect(rect![0, 0, CURSOR_WIDTH, FONT_SIZE], sdl2::pixels::Color::RGBA(255, 255, 255, 128)).unwrap();
 
-        Cursor{ x: x, y: y, wanted_x: x, number_w: 0, screen_x: 0, screen_y: 0, texture: texture_creator.create_texture_from_surface(cursor_surface).unwrap() }
+        Cursor{ x: x, y: y, wanted_x: x, number_w: 0, screen_x: 0, screen_y: 0, surface: cursor_surface }
     }
 
     pub fn up(&mut self, text: &Vec<String>, canvas: &Canvas<Window>) {

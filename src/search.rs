@@ -2,7 +2,7 @@ pub struct SearchHandler {
     pub active: bool,
     pub search_string: String,
 
-    cur_index: usize,
+    pub cur_index: usize,
     pub found_places: Vec<(u32, u32)>
 }
 impl SearchHandler {

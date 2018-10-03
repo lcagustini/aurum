@@ -8,8 +8,6 @@ use sdl2::keyboard::Keycode;
 
 use unicode_segmentation::UnicodeSegmentation;
 
-use std::env;
-
 macro_rules! rect(($x:expr, $y:expr, $w:expr, $h:expr) => (sdl2::rect::Rect::new($x as i32, $y as i32, $w as u32, $h as u32)));
 
 const BG_COLOR: Color = Color{r: 25, g: 25, b: 25, a: 255};
@@ -17,7 +15,8 @@ const BAR_COLOR: Color = Color{r: 15, g: 15, b: 15, a: 255};
 const SELECT_COLOR: Color = Color{r: 255, g: 255, b: 255, a: 255};
 const SEARCH_COLOR: Color = Color{r: 255, g: 255, b: 30, a: 255};
 
-const FONT_SIZE: u16 = 20;
+const FONT_SIZE: u16 = 18;
+const CURSOR_WIDTH: u32 = 8;
 
 mod utils;
 mod text;
@@ -25,14 +24,14 @@ mod cursor;
 mod select;
 mod undo;
 mod search;
+mod editor;
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let ttf_context = sdl2::ttf::init().unwrap();
 
-    let args: Vec<String> = env::args().collect();
-
+    let mut event_pump = sdl_context.event_pump().unwrap();
     let window = video_subsystem.window("Aurum", 1200, 1000)
         .position_centered()
         .allow_highdpi()
@@ -40,27 +39,11 @@ fn main() {
         .build()
         .unwrap();
 
-    let mut font = ttf_context.load_font("roboto.ttf", FONT_SIZE).unwrap();
-    font.set_style(sdl2::ttf::STYLE_NORMAL);
-
-    let mut canvas = window.into_canvas().build().unwrap();
+    let canvas = window.into_canvas().build().unwrap();
     let texture_creator = canvas.texture_creator();
 
-    let lines: Vec<String> =
-        if args.len() > 1 {
-            utils::read_file(&args[1]).split("\n").map(|x| x.to_owned()).collect()
-        }
-        else {
-            vec!["".to_owned()]
-        };
+    let mut editor = editor::Editor::create(canvas, &ttf_context);
 
-    let mut text = text::Text::new(font, lines, args);
-    let mut cursor = cursor::Cursor::new(0, 0, &texture_creator);
-    let mut selected = select::SelectHandler{x1: 0, y1: 0, x2: 0, y2: 0};
-    let mut undo_handler = undo::UndoHandler::new(&cursor, &text);
-    let mut search_handler = search::SearchHandler::new();
-
-    let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
@@ -69,41 +52,41 @@ fn main() {
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Left), .. } => {
-                    cursor.left(&text.raw);
-                    text.needs_update = true;
+                    editor.cursor.left(&editor.text.raw);
+                    editor.text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Right), .. } => {
-                    cursor.right(&text.raw);
-                    text.needs_update = true;
+                    editor.cursor.right(&editor.text.raw);
+                    editor.text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Up), .. } => {
-                    cursor.up(&text.raw, &canvas);
-                    text.needs_update = true;
+                    editor.cursor.up(&editor.text.raw, &editor.canvas);
+                    editor.text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Down), .. } => {
-                    cursor.down(&text.raw, &canvas);
-                    text.needs_update = true;
+                    editor.cursor.down(&editor.text.raw, &editor.canvas);
+                    editor.text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::O), keymod, .. } => {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
-                        let dir = text.get_text_dir();
+                        let dir = editor.text.get_text_dir();
                         let result = nfd::open_file_dialog(None, Some(&dir)).unwrap();
                         match result {
                             nfd::Response::Okay(file_path) => {
-                                text.raw = utils::read_file(&file_path).split("\n").map(|x| x.to_owned()).collect();
-                                text.file_path = file_path;
+                                editor.text.raw = utils::read_file(&file_path).split("\n").map(|x| x.to_owned()).collect();
+                                editor.text.file_path = file_path;
 
-                                cursor.x = 0;
-                                cursor.y = 0;
+                                editor.cursor.x = 0;
+                                editor.cursor.y = 0;
 
-                                undo_handler.clear_states();
-                                undo_handler.create_state(&cursor, &text);
+                                editor.undo_handler.clear_states();
+                                editor.undo_handler.create_state(&editor.cursor, &editor.text);
 
-                                text.needs_update = true;
+                                editor.text.needs_update = true;
                             },
 
                             _ => ()
@@ -113,17 +96,17 @@ fn main() {
 
                 Event::KeyDown { keycode: Some(Keycode::S), keymod, .. } => {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
-                        if text.file_path != "" {
-                            utils::save_file(&text.file_path, &text.raw);
+                        if editor.text.file_path != "" {
+                            utils::save_file(&editor.text.file_path, &editor.text.raw);
                         }
                         else {
                             let result = nfd::open_save_dialog(None, None).unwrap();
                             match result {
                                 nfd::Response::Okay(file_path) => {
-                                    utils::save_file(&file_path, &text.raw);
-                                    text.file_path = file_path;
+                                    utils::save_file(&file_path, &editor.text.raw);
+                                    editor.text.file_path = file_path;
 
-                                    text.needs_update = true;
+                                    editor.text.needs_update = true;
                                 },
 
                                 _ => ()
@@ -137,28 +120,28 @@ fn main() {
                     ctrl_shift.insert(sdl2::keyboard::LSHIFTMOD);
 
                     if keymod.contains(ctrl_shift) {
-                        undo_handler.restore_next_state(&mut cursor, &mut text);
-                        text.needs_update = true;
+                        editor.undo_handler.restore_next_state(&mut editor.cursor, &mut editor.text);
+                        editor.text.needs_update = true;
                     }
                     else if keymod.contains(sdl2::keyboard::LCTRLMOD) {
-                        undo_handler.restore_previous_state(&mut cursor, &mut text);
-                        text.needs_update = true;
+                        editor.undo_handler.restore_previous_state(&mut editor.cursor, &mut editor.text);
+                        editor.text.needs_update = true;
                     }
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::F), keymod, .. } => {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
-                        search_handler.active = !search_handler.active;
-                        search_handler.search_string.clear();
+                        editor.search_handler.active = !editor.search_handler.active;
+                        editor.search_handler.search_string.clear();
 
-                        text.needs_update = true;
+                        editor.text.needs_update = true;
                     }
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::C), keymod, .. } => {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
-                        if !search_handler.active {
-                            let text = selected.get_selected_text(&text);
+                        if !editor.search_handler.active {
+                            let text = editor.selected.get_selected_text(&editor.text);
                             video_subsystem.clipboard().set_clipboard_text(&text).unwrap();
                         }
                     }
@@ -166,123 +149,131 @@ fn main() {
 
                 Event::KeyDown { keycode: Some(Keycode::V), keymod, .. } => {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
-                        if !search_handler.active {
+                        if !editor.search_handler.active {
                             let input: Vec<String> = video_subsystem.clipboard().clipboard_text().unwrap().split("\n").map(|x| x.to_owned()).collect();
 
                             for line in input {
-                                text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, &line);
-                                text.raw.insert(cursor.get_absolute_y()+1, "".to_owned());
-                                cursor.x += line.len() as u32;
-                                cursor.down(&text.raw, &canvas);
+                                editor.text.raw[editor.cursor.get_absolute_y()].insert_str(editor.cursor.x as usize, &line);
+                                editor.text.raw.insert(editor.cursor.get_absolute_y()+1, "".to_owned());
+                                editor.cursor.x += line.len() as u32;
+                                editor.cursor.down(&editor.text.raw, &editor.canvas);
                             }
-                            undo_handler.create_state(&cursor, &text);
-                            text.needs_update = true;
+                            editor.undo_handler.create_state(&editor.cursor, &editor.text);
+                            editor.text.needs_update = true;
                         }
                     }
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Return), .. } => {
-                    if search_handler.active {
-                        match search_handler.next_string_pos() {
+                    if editor.search_handler.active {
+                        match editor.search_handler.next_string_pos() {
                             Some((x, y)) => {
-                                while cursor.get_absolute_y() > y as usize {
-                                    cursor.up(&text.raw, &canvas);
+                                while editor.cursor.get_absolute_y() > y as usize {
+                                    editor.cursor.up(&editor.text.raw, &editor.canvas);
                                 }
 
-                                while cursor.get_absolute_y() < y as usize {
-                                    cursor.down(&text.raw, &canvas);
+                                while editor.cursor.get_absolute_y() < y as usize {
+                                    editor.cursor.down(&editor.text.raw, &editor.canvas);
                                 }
 
-                                while cursor.x > x {
-                                    cursor.left(&text.raw);
+                                while editor.cursor.x > x {
+                                    editor.cursor.left(&editor.text.raw);
                                 }
 
-                                while cursor.x < x {
-                                    cursor.right(&text.raw);
+                                while editor.cursor.x < x {
+                                    editor.cursor.right(&editor.text.raw);
                                 }
                             },
                             None => (),
                         }
                     }
                     else {
-                        text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, "\n");
+                        editor.text.raw[editor.cursor.get_absolute_y()].insert_str(editor.cursor.x as usize, "\n");
 
-                        let halves: Vec<String> = text.raw[cursor.get_absolute_y()].split("\n").map(|x| x.to_owned()).collect();
+                        let halves: Vec<String> = editor.text.raw[editor.cursor.get_absolute_y()].split("\n").map(|x| x.to_owned()).collect();
 
-                        text.raw[cursor.get_absolute_y()] = halves[0].clone();
+                        editor.text.raw[editor.cursor.get_absolute_y()] = halves[0].clone();
 
-                        text.raw.insert((cursor.get_absolute_y()+1) as usize, halves[1].clone());
+                        let space_amount = halves[0].len() - halves[0].trim_left().len();
+                        let mut space_string = "".to_owned();
 
-                        cursor.x = 0;
-                        cursor.wanted_x = 0;
-                        cursor.y += 1;
+                        for _ in 0..space_amount {
+                            space_string.push(' ');
+                        };
 
-                        undo_handler.create_state(&cursor, &text);
+                        space_string.insert_str(0, &halves[1]);
+                        editor.text.raw.insert((editor.cursor.get_absolute_y()+1) as usize, space_string);
+
+                        editor.cursor.x = space_amount as u32;
+                        editor.cursor.wanted_x = 0;
+                        editor.cursor.y += 1;
+
+                        editor.undo_handler.create_state(&editor.cursor, &editor.text);
                     }
-                    text.needs_update = true;
+                    editor.text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Backspace), .. } => {
-                    if search_handler.active {
-                        search_handler.search_string.pop();
+                    if editor.search_handler.active {
+                        editor.search_handler.search_string.pop();
                     }
                     else {
-                        if cursor.x > 0 {
-                            cursor.left(&text.raw);
-                            text.raw[cursor.get_absolute_y()].remove(cursor.x as usize);
+                        if editor.cursor.x > 0 {
+                            editor.cursor.left(&editor.text.raw);
+                            editor.text.raw[editor.cursor.get_absolute_y()].remove(editor.cursor.x as usize);
                         }
-                        else if cursor.x == 0 && cursor.get_absolute_y() > 0 {
-                            let line = text.raw[cursor.get_absolute_y()].clone();
+                        else if editor.cursor.x == 0 && editor.cursor.get_absolute_y() > 0 {
+                            let line = editor.text.raw[editor.cursor.get_absolute_y()].clone();
 
-                            cursor.x = text.raw[cursor.get_absolute_y()-1].len() as u32;
-                            cursor.wanted_x = cursor.x;
+                            editor.cursor.x = editor.text.raw[editor.cursor.get_absolute_y()-1].len() as u32;
+                            editor.cursor.wanted_x = editor.cursor.x;
 
-                            text.raw[cursor.get_absolute_y()-1].push_str(&line);
+                            editor.text.raw[editor.cursor.get_absolute_y()-1].push_str(&line);
 
-                            text.raw.remove(cursor.get_absolute_y());
+                            editor.text.raw.remove(editor.cursor.get_absolute_y());
 
-                            if cursor.y == 0 {
-                                cursor.screen_y -= 1;
+                            if editor.cursor.y == 0 {
+                                editor.cursor.screen_y -= 1;
                             }
                             else {
-                                cursor.y -= 1;
+                                editor.cursor.y -= 1;
                             }
                         }
                     }
-                    text.needs_update = true;
+                    editor.text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Tab), .. } => {
-                    if !search_handler.active {
+                    if !editor.search_handler.active {
                         let input = "    ";
-                        text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, input);
-                        cursor.x += input.len() as u32;
-                        text.needs_update = true;
+                        editor.text.raw[editor.cursor.get_absolute_y()].insert_str(editor.cursor.x as usize, input);
+                        editor.cursor.x += input.len() as u32;
+                        editor.text.needs_update = true;
                     }
                 },
 
                 Event::TextInput { text: input, .. } => {
-                    if search_handler.active {
-                        search_handler.search_string.push_str(&input);
-                        search_handler.find_search_string(&text.raw);
+                    if editor.search_handler.active {
+                        editor.search_handler.search_string.push_str(&input);
+                        editor.search_handler.find_search_string(&editor.text.raw);
                     }
                     else {
-                        text.raw[cursor.get_absolute_y()].insert_str(cursor.x as usize, &input);
-                        cursor.x += input.len() as u32;
+                        editor.text.raw[editor.cursor.get_absolute_y()].insert_str(editor.cursor.x as usize, &input);
+                        editor.cursor.x += input.len() as u32;
                     }
-                    text.needs_update = true;
+                    editor.text.needs_update = true;
                 },
 
                 Event::MouseWheel { y: dir, .. } => {
-                    cursor.scroll_screen(&canvas, &text.raw, dir);
-                    text.needs_update = true;
+                    editor.cursor.scroll_screen(&editor.canvas, &editor.text.raw, dir);
+                    editor.text.needs_update = true;
                 },
 
                 Event::MouseButtonDown { mouse_btn: button, x, y, .. } => {
                     match button {
                         sdl2::mouse::MouseButton::Left => {
-                            let n_w = cursor.number_w;
-                            cursor.move_to(x, y, n_w, &texture_creator, &mut text);
+                            let n_w = editor.cursor.number_w;
+                            editor.cursor.move_to(x, y, n_w, &texture_creator, &mut editor.text);
                         },
                         _ => {},
                     }
@@ -291,32 +282,32 @@ fn main() {
                 Event::MouseButtonUp { mouse_btn: button, x, y, .. } => {
                     match button {
                         sdl2::mouse::MouseButton::Left => {
-                            let (old_x, old_y) = (cursor.x, cursor.get_absolute_y());
+                            let (old_x, old_y) = (editor.cursor.x, editor.cursor.get_absolute_y());
 
                             {
-                                let n_w = cursor.number_w;
-                                cursor.move_to(x, y, n_w, &texture_creator, &mut text);
+                                let n_w = editor.cursor.number_w;
+                                editor.cursor.move_to(x, y, n_w, &texture_creator, &mut editor.text);
                             }
 
-                            if old_x < cursor.x {
-                                selected.x1 = old_x as usize;
-                                selected.x2 = cursor.x as usize;
+                            if old_x < editor.cursor.x {
+                                editor.selected.x1 = old_x as usize;
+                                editor.selected.x2 = editor.cursor.x as usize;
                             }
                             else {
-                                selected.x2 = old_x as usize;
-                                selected.x1 = cursor.x as usize;
+                                editor.selected.x2 = old_x as usize;
+                                editor.selected.x1 = editor.cursor.x as usize;
                             }
 
-                            if old_y < cursor.get_absolute_y() {
-                                selected.y1 = old_y as usize;
-                                selected.y2 = cursor.get_absolute_y() as usize;
+                            if old_y < editor.cursor.get_absolute_y() {
+                                editor.selected.y1 = old_y as usize;
+                                editor.selected.y2 = editor.cursor.get_absolute_y() as usize;
                             }
                             else {
-                                selected.y1 = cursor.get_absolute_y() as usize;
-                                selected.y2 = old_y as usize;
+                                editor.selected.y1 = editor.cursor.get_absolute_y() as usize;
+                                editor.selected.y2 = old_y as usize;
                             }
 
-                            text.needs_update = true;
+                            editor.text.needs_update = true;
                         },
                         _ => {},
                     }
@@ -325,7 +316,7 @@ fn main() {
                 Event::Window { win_event: event, .. } => {
                     match event {
                         sdl2::event::WindowEvent::SizeChanged(_, _) | sdl2::event::WindowEvent::FocusGained |
-                            sdl2::event::WindowEvent::Exposed | sdl2::event::WindowEvent::Moved(_, _)=> text.needs_update = true,
+                            sdl2::event::WindowEvent::Exposed | sdl2::event::WindowEvent::Moved(_, _)=> editor.text.needs_update = true,
                         _ => {},
                     }
                 },
@@ -334,8 +325,8 @@ fn main() {
             }
         }
 
-        if !text.needs_update {
-            let display_index = canvas.window().display_index().unwrap();
+        if !editor.text.needs_update {
+            let display_index = editor.canvas.window().display_index().unwrap();
             let display_mode = video_subsystem.current_display_mode(display_index).unwrap();
             let frame_time = 1.0/display_mode.refresh_rate as f64;
             let duration = std::time::Duration::new(frame_time as u64, ((frame_time - (frame_time as usize) as f64)*1_000_000_000.0) as u32);
@@ -343,49 +334,49 @@ fn main() {
 
             continue;
         }
-        canvas.set_draw_color(BG_COLOR);
-        canvas.clear();
+        editor.canvas.set_draw_color(BG_COLOR);
+        editor.canvas.clear();
 
-        let (w_width, w_height) = canvas.window().size();
+        let (w_width, w_height) = editor.canvas.window().size();
 
         //Draw Lines
         {
-            let screen_limit = if text.raw.len() < (cursor.screen_y + canvas.window().size().1/text.font_size as u32) as usize {
-                text.raw.len()
+            let screen_limit = if editor.text.raw.len() < (editor.cursor.screen_y + editor.canvas.window().size().1/editor.text.font_size as u32) as usize {
+                editor.text.raw.len()
             }
             else {
-                (cursor.screen_y + canvas.window().size().1/text.font_size as u32) as usize
+                (editor.cursor.screen_y + editor.canvas.window().size().1/editor.text.font_size as u32) as usize
             };
-            for i in (cursor.screen_y as usize)..screen_limit {
+            for i in (editor.cursor.screen_y as usize)..screen_limit {
                 let mut x = 0;
-                let y = text.font_size*((i-cursor.screen_y as usize) as u16);
+                let y = editor.text.font_size*((i-editor.cursor.screen_y as usize) as u16);
 
-                let number = format!["{:1$} ", i+1, utils::number_of_digits(text.raw.len())];
+                let number = format!["{:1$} ", i+1, utils::number_of_digits(editor.text.raw.len())];
                 let mut n_iter = number.graphemes(true);
                 let mut n = n_iter.next();
                 while n != None {
-                    let texture = text.get_bold_char(n.unwrap(), &texture_creator);
+                    let texture = editor.text.get_bold_char(n.unwrap(), &texture_creator);
                     let texture_info = texture.query();
 
-                    canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
+                    editor.canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
                     x += texture_info.width;
 
                     n = n_iter.next()
                 }
 
-                cursor.number_w = x;
+                editor.cursor.number_w = x;
 
-                let line = text.raw[i].clone();
+                let line = editor.text.raw[i].clone();
                 let mut c_iter = line.graphemes(true);
                 let mut c = c_iter.next();
-                for _ in 0..cursor.screen_x {
+                for _ in 0..editor.cursor.screen_x {
                     c = c_iter.next();
                 }
                 while c != None {
-                    let texture = text.get_normal_char(c.unwrap(), &texture_creator);
+                    let texture = editor.text.get_normal_char(c.unwrap(), &texture_creator);
                     let texture_info = texture.query();
 
-                    canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
+                    editor.canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
                     x += texture_info.width;
 
                     c = c_iter.next()
@@ -396,40 +387,40 @@ fn main() {
         //Draw text selection
         // TODO: transparent selection box
         {
-            if selected.x1 != selected.x2 || selected.y1 != selected.y2 {
-                let (half, _) = text.raw[selected.y1].split_at(selected.x1);
-                let (x1, _) = text.font.size_of(half).unwrap();
+            if editor.selected.x1 != editor.selected.x2 || editor.selected.y1 != editor.selected.y2 {
+                let (half, _) = editor.text.raw[editor.selected.y1].split_at(editor.selected.x1);
+                let (x1, _) = editor.text.font.size_of(half).unwrap();
 
                 let (half, _) =
-                    if selected.x2 < text.raw[selected.y2].len() {
-                        text.raw[selected.y2].split_at(selected.x2)
+                    if editor.selected.x2 < editor.text.raw[editor.selected.y2].len() {
+                        editor.text.raw[editor.selected.y2].split_at(editor.selected.x2)
                     }
                     else {
-                        (&text.raw[selected.y2][..], "")
+                        (&editor.text.raw[editor.selected.y2][..], "")
                     };
-                let (x2, _) = text.font.size_of(half).unwrap();
+                let (x2, _) = editor.text.font.size_of(half).unwrap();
 
-                canvas.set_draw_color(SELECT_COLOR);
-                if selected.y1 == selected.y2 {
-                    canvas.draw_rect(rect![x1+cursor.number_w, selected.y1*text.font_size as usize, x2-x1, text.font_size]).unwrap();
+                editor.canvas.set_draw_color(SELECT_COLOR);
+                if editor.selected.y1 == editor.selected.y2 {
+                    editor.canvas.draw_rect(rect![x1+editor.cursor.number_w, editor.selected.y1*editor.text.font_size as usize, x2-x1, editor.text.font_size]).unwrap();
                 }
                 else {
-                    for i in selected.y1..=selected.y2 {
-                        let mut start = cursor.number_w;
-                        let mut end = cursor.number_w;
-                        let (all, _) = text.font.size_of(&text.raw[i][..]).unwrap();
+                    for i in editor.selected.y1..=editor.selected.y2 {
+                        let mut start = editor.cursor.number_w;
+                        let mut end = editor.cursor.number_w;
+                        let (all, _) = editor.text.font.size_of(&editor.text.raw[i][..]).unwrap();
 
-                        if i == selected.y1 {
+                        if i == editor.selected.y1 {
                             start += x1;
                             end += all;
                         }
-                        else if i == selected.y2 {
+                        else if i == editor.selected.y2 {
                             end += x2;
                         }
                         else {
                             end += all;
                         }
-                        canvas.draw_rect(rect![start, i*text.font_size as usize, end-start, text.font_size]).unwrap();
+                        editor.canvas.draw_rect(rect![start, i*editor.text.font_size as usize, end-start, editor.text.font_size]).unwrap();
                     }
                 }
             }
@@ -437,15 +428,15 @@ fn main() {
 
         //Draw search highlight
         {
-            if search_handler.active {
-                for (x, y) in &search_handler.found_places {
-                    if y.clone() >= cursor.screen_y {
-                        let (half, _) = text.raw[y.clone() as usize].split_at(x.clone() as usize);
-                        let (x1, _) = text.font.size_of(half).unwrap();
-                        let (w, _) = text.font.size_of(&search_handler.search_string).unwrap();
+            if editor.search_handler.active {
+                for (x, y) in &editor.search_handler.found_places {
+                    if y.clone() >= editor.cursor.screen_y {
+                        let (half, _) = editor.text.raw[y.clone() as usize].split_at(x.clone() as usize);
+                        let (x1, _) = editor.text.font.size_of(half).unwrap();
+                        let (w, _) = editor.text.font.size_of(&editor.search_handler.search_string).unwrap();
 
-                        canvas.set_draw_color(SEARCH_COLOR);
-                        canvas.draw_rect(rect![x1+cursor.number_w, (y-cursor.screen_y)*text.font_size as u32, w, text.font_size]).unwrap();
+                        editor.canvas.set_draw_color(SEARCH_COLOR);
+                        editor.canvas.draw_rect(rect![x1+editor.cursor.number_w, (y-editor.cursor.screen_y)*editor.text.font_size as u32, w, editor.text.font_size]).unwrap();
                     }
                 }
             }
@@ -453,30 +444,33 @@ fn main() {
 
         //Draw cursor
         {
-            text.font.set_style(sdl2::ttf::STYLE_NORMAL);
-            let (half, _) = text.raw[cursor.get_absolute_y()].split_at(cursor.x as usize);
-            let (x, _) = text.font.size_of(half).unwrap();
-            canvas.copy(&cursor.texture, None, Some(rect![x+cursor.number_w, cursor.y*(text.font_size as u32), 4, text.font_size])).unwrap();
+            editor.text.font.set_style(sdl2::ttf::STYLE_NORMAL);
+            let (half, _) = editor.text.raw[editor.cursor.get_absolute_y()].split_at(editor.cursor.x as usize);
+            let (x, _) = editor.text.font.size_of(half).unwrap();
+
+            let texture = texture_creator.create_texture_from_surface(&editor.cursor.surface).unwrap();
+
+            editor.canvas.copy(&texture, None, Some(rect![x+editor.cursor.number_w, editor.cursor.y*(editor.text.font_size as u32), CURSOR_WIDTH, editor.text.font_size])).unwrap();
         }
 
         //Draw statusbar
         {
-            canvas.set_draw_color(BAR_COLOR);
-            canvas.fill_rect(rect![0, w_height - text.font_size as u32, w_width, text.font_size]).unwrap();
+            editor.canvas.set_draw_color(BAR_COLOR);
+            editor.canvas.fill_rect(rect![0, w_height - editor.text.font_size as u32, w_width, editor.text.font_size]).unwrap();
 
             //Right aligned
             {
-                let lines_ui = format!["{}/{}: {}", cursor.get_absolute_y()+1, text.raw.len(), cursor.x+1];
+                let lines_ui = format!["{}/{}: {}", editor.cursor.get_absolute_y()+1, editor.text.raw.len(), editor.cursor.x+1];
                 let mut n_iter = lines_ui.graphemes(true);
                 let mut n = n_iter.next();
-                let mut x = w_width-text.font.size_of(&lines_ui).unwrap().0-10;
+                let mut x = w_width-editor.text.font.size_of(&lines_ui).unwrap().0-10;
                 while n != None {
-                    let f_s = text.font_size;
+                    let f_s = editor.text.font_size;
 
-                    let texture = text.get_normal_char(n.unwrap(), &texture_creator);
+                    let texture = editor.text.get_normal_char(n.unwrap(), &texture_creator);
                     let texture_info = texture.query();
 
-                    canvas.copy(&texture, None, Some(rect![x, w_height-f_s as u32, texture_info.width, texture_info.height])).unwrap();
+                    editor.canvas.copy(&texture, None, Some(rect![x, w_height-f_s as u32, texture_info.width, texture_info.height])).unwrap();
 
                     n = n_iter.next();
 
@@ -486,23 +480,30 @@ fn main() {
             //Left aligned
             {
                 let lines_ui =
-                    if search_handler.active {
-                        format!["Search: {}", &search_handler.search_string]
+                    if editor.search_handler.active {
+                        let index =
+                            if editor.search_handler.cur_index == 0 {
+                                editor.search_handler.found_places.len()
+                            }
+                            else {
+                                editor.search_handler.cur_index
+                            };
+                        format!["Search: {} [{}/{}]", &editor.search_handler.search_string, index, editor.search_handler.found_places.len()]
                     }
-                    else { 
-                        format!["{}: {}", &text.get_text_type(), &text.file_path]
+                    else {
+                        format!["{}: {}", &editor.text.get_text_type(), &editor.text.file_path]
                     };
 
                 let mut n_iter = lines_ui.graphemes(true);
                 let mut n = n_iter.next();
                 let mut x = 10;
                 while n != None {
-                    let f_s = text.font_size;
+                    let f_s = editor.text.font_size;
 
-                    let texture = text.get_normal_char(n.unwrap(), &texture_creator);
+                    let texture = editor.text.get_normal_char(n.unwrap(), &texture_creator);
                     let texture_info = texture.query();
 
-                    canvas.copy(texture, None, Some(rect![x, w_height-f_s as u32, texture_info.width, texture_info.height])).unwrap();
+                    editor.canvas.copy(texture, None, Some(rect![x, w_height-f_s as u32, texture_info.width, texture_info.height])).unwrap();
 
                     n = n_iter.next();
 
@@ -511,8 +512,8 @@ fn main() {
             }
         }
 
-        canvas.present();
+        editor.canvas.present();
 
-        text.needs_update = false;
+        editor.text.needs_update = false;
     }
 }

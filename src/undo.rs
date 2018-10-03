@@ -17,15 +17,8 @@ pub struct UndoHandler {
     cur_state: usize,
 }
 impl UndoHandler {
-    pub fn new(cursor: &cursor::Cursor, text: &text::Text) -> UndoHandler {
-        let new_state = UndoState{cursor_x: cursor.x,
-                                  cursor_y: cursor.y,
-                                  cursor_wanted_x: cursor.wanted_x,
-                                  cursor_screen_y: cursor.screen_y,
-                                  cursor_number_w: cursor.number_w,
-                                  text: text.raw.clone()};
-
-        UndoHandler{states: vec![new_state], cur_state: 1}
+    pub fn new() -> UndoHandler {
+        UndoHandler{states: Vec::new(), cur_state: 0}
     }
 
     pub fn create_state(&mut self, cursor: &cursor::Cursor, text: &text::Text) {
