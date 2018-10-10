@@ -86,6 +86,7 @@ fn main() {
 
                                 editor.cursor.x = 0;
                                 editor.cursor.wanted_x = 0;
+                                editor.cursor.screen_y = 0;
                                 editor.cursor.y = 0;
 
                                 editor.undo_handler.clear_states();
