@@ -6,7 +6,7 @@
     "c_comment": 9869462,
     "c_other": 16777215,
 
-    "s_constant": "(?i)\\b-*\\d+\\.\\d*[fd]*\\b|\\b\\d+\\b|\\btrue\\b|\\bfalse\\b|\".*\"|'.+'",
+    "s_constant": "(?i)\\b\\d+\\.\\d*[fd]*\\b|\\b\\d+\\b|\\btrue\\b|\\bfalse\\b|\".*\"|'.+'",
     "s_keyword": "\\bbreak\\b|\\bcase\\b|\\bconst\\b|\\bcontinue\\b|\\bdefault\\b|\\bdo\\b|\\belse\\b|\\benum\\b|\\bextern\\b|\\bfor\\b|\\bgoto\\b|\\bif\\b|\\binline\\b|\\breturn\\b|\\bsizeof\\b|\\bstatic\\b|\\bstruct\\b|\\bswitch\\b|\\btypedef\\b|\\bunion\\b|\\bvolatile\\b|\\bwhile\\b",
     "s_preproc": "^#.*",
     "s_data_type": "\\bchar\\b|\\bdouble\\b|\\bfloat\\b|\\bint\\b|\\blong\\b|\\bshort\\b|\\bsigned\\b|\\bunsigned\\b|\\bvoid\\b",
