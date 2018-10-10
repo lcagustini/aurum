@@ -22,16 +22,8 @@ pub struct Text<'ttf, 'a> {
     pub needs_update: bool,
 }
 impl<'ttf, 'a> Text<'ttf, 'a> {
-    pub fn new(font: sdl2::ttf::Font<'ttf, 'a>, raw: Vec<String>, args: Vec<String>) -> Text<'ttf, 'a> {
-        let file =
-            if args.len() > 1 {
-                args[1].clone()
-            }
-            else {
-                "".to_owned()
-            };
-
-        Text { font: font, font_size: ::FONT_SIZE, raw: raw, file_path: file, normal_character_cache: HashMap::new(), bold_character_cache: HashMap::new(), needs_update: true }
+    pub fn new(font: sdl2::ttf::Font<'ttf, 'a>, raw: Vec<String>) -> Text<'ttf, 'a> {
+        Text { font: font, font_size: ::FONT_SIZE, raw: raw, file_path: "".to_owned(), normal_character_cache: HashMap::new(), bold_character_cache: HashMap::new(), needs_update: true }
     }
 
     pub fn get_bold_char(&mut self, character: &str, texture_creator: &'a TextureCreator<WindowContext>) -> &Texture {
@@ -47,7 +39,7 @@ impl<'ttf, 'a> Text<'ttf, 'a> {
         self.bold_character_cache.get(character).unwrap()
     }
 
-    pub fn get_normal_char(&mut self, character: &str, texture_creator: &'a TextureCreator<WindowContext>) -> &Texture {
+    pub fn get_normal_char(&mut self, character: &str, texture_creator: &'a TextureCreator<WindowContext>, r: u8, g: u8, b: u8) -> &Texture {
         if !self.normal_character_cache.contains_key(character) {
             self.font.set_style(sdl2::ttf::STYLE_NORMAL);
 
@@ -55,6 +47,11 @@ impl<'ttf, 'a> Text<'ttf, 'a> {
             let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
 
             self.normal_character_cache.insert(character.to_owned(), texture);
+        }
+
+        {
+            let t = self.normal_character_cache.get_mut(character).unwrap();
+            t.set_color_mod(r, g, b);
         }
 
         self.normal_character_cache.get(character).unwrap()

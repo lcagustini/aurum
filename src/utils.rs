@@ -1,12 +1,22 @@
 use std::io::prelude::*;
 use std::fs::File;
+use std::env;
+
+use ::text;
 
 pub fn read_file(path: &str) -> String {
-    let mut file = File::open(path).unwrap();
-    let mut s = String::new();
-    let _ = file.read_to_string(&mut s);
+    let file = File::open(path);
+    match file {
+        Ok(mut file) => {
+            let mut s = String::new();
+            let _ = file.read_to_string(&mut s);
 
-    s
+            return s;
+        },
+        Err(_) => {
+            return "?".to_owned();
+        },
+    }
 }
 
 pub fn save_file(path: &str, buffer: &Vec<String>) {
@@ -33,4 +43,15 @@ pub fn number_of_digits(n: usize) -> usize {
         i += 1;
     }
     i
+}
+
+pub fn get_lang_name(text: &text::Text) -> String {
+    let text_type = text.get_text_type();
+    if text_type == "?" {
+        return text_type;
+    }
+    else {
+        let path = format!["{}/langs/{}/name", env::current_dir().unwrap().display(), text_type];
+        return read_file(&path).trim().to_owned();
+    }
 }

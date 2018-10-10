@@ -1,12 +1,15 @@
 extern crate sdl2;
 extern crate unicode_segmentation;
 extern crate nfd;
+#[macro_use] extern crate serde_derive;
 
 use sdl2::pixels::Color;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 
 use unicode_segmentation::UnicodeSegmentation;
+
+use std::env;
 
 macro_rules! rect(($x:expr, $y:expr, $w:expr, $h:expr) => (sdl2::rect::Rect::new($x as i32, $y as i32, $w as u32, $h as u32)));
 
@@ -25,6 +28,7 @@ mod select;
 mod undo;
 mod search;
 mod editor;
+mod syntax;
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -81,10 +85,17 @@ fn main() {
                                 editor.text.file_path = file_path;
 
                                 editor.cursor.x = 0;
+                                editor.cursor.wanted_x = 0;
                                 editor.cursor.y = 0;
 
                                 editor.undo_handler.clear_states();
                                 editor.undo_handler.create_state(&editor.cursor, &editor.text);
+
+                                let text_type = editor.text.get_text_type();
+                                if text_type != "?" {
+                                    let path = format!["{}/langs/{}/syntax", env::current_dir().unwrap().display(), text_type];
+                                    editor.syntax_handler = syntax::SyntaxHandler::parse_syntax_file(&path);
+                                }
 
                                 editor.text.needs_update = true;
                             },
@@ -341,12 +352,14 @@ fn main() {
 
         //Draw Lines
         {
-            let screen_limit = if editor.text.raw.len() < (editor.cursor.screen_y + editor.canvas.window().size().1/editor.text.font_size as u32) as usize {
-                editor.text.raw.len()
-            }
-            else {
-                (editor.cursor.screen_y + editor.canvas.window().size().1/editor.text.font_size as u32) as usize
-            };
+            let screen_limit =
+                if editor.text.raw.len() < (editor.cursor.screen_y + editor.canvas.window().size().1/editor.text.font_size as u32) as usize {
+                    editor.text.raw.len()
+                }
+                else {
+                    (editor.cursor.screen_y + editor.canvas.window().size().1/editor.text.font_size as u32) as usize
+                };
+
             for i in (editor.cursor.screen_y as usize)..screen_limit {
                 let mut x = 0;
                 let y = editor.text.font_size*((i-editor.cursor.screen_y as usize) as u16);
@@ -367,13 +380,14 @@ fn main() {
                 editor.cursor.number_w = x;
 
                 let line = editor.text.raw[i].clone();
+
+                let mut colors = syntax::SyntaxHandler::get_line_color(&line, &editor).into_iter();
+
                 let mut c_iter = line.graphemes(true);
                 let mut c = c_iter.next();
-                for _ in 0..editor.cursor.screen_x {
-                    c = c_iter.next();
-                }
                 while c != None {
-                    let texture = editor.text.get_normal_char(c.unwrap(), &texture_creator);
+                    let (r, g, b) = colors.next().unwrap().rgb();
+                    let texture = editor.text.get_normal_char(c.unwrap(), &texture_creator, r, g, b);
                     let texture_info = texture.query();
 
                     editor.canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
@@ -402,7 +416,7 @@ fn main() {
 
                 editor.canvas.set_draw_color(SELECT_COLOR);
                 if editor.selected.y1 == editor.selected.y2 {
-                    editor.canvas.draw_rect(rect![x1+editor.cursor.number_w, editor.selected.y1*editor.text.font_size as usize, x2-x1, editor.text.font_size]).unwrap();
+                    editor.canvas.draw_rect(rect![x1+editor.cursor.number_w, (editor.selected.y1 as isize - editor.cursor.screen_y as isize)*editor.text.font_size as isize, x2-x1, editor.text.font_size]).unwrap();
                 }
                 else {
                     for i in editor.selected.y1..=editor.selected.y2 {
@@ -420,7 +434,7 @@ fn main() {
                         else {
                             end += all;
                         }
-                        editor.canvas.draw_rect(rect![start, i*editor.text.font_size as usize, end-start, editor.text.font_size]).unwrap();
+                        editor.canvas.draw_rect(rect![start, (i as isize - editor.cursor.screen_y as isize)*editor.text.font_size as isize, end-start, editor.text.font_size]).unwrap();
                     }
                 }
             }
@@ -467,7 +481,7 @@ fn main() {
                 while n != None {
                     let f_s = editor.text.font_size;
 
-                    let texture = editor.text.get_normal_char(n.unwrap(), &texture_creator);
+                    let texture = editor.text.get_normal_char(n.unwrap(), &texture_creator, 255, 255, 255);
                     let texture_info = texture.query();
 
                     editor.canvas.copy(&texture, None, Some(rect![x, w_height-f_s as u32, texture_info.width, texture_info.height])).unwrap();
@@ -491,7 +505,7 @@ fn main() {
                         format!["Search: {} [{}/{}]", &editor.search_handler.search_string, index, editor.search_handler.found_places.len()]
                     }
                     else {
-                        format!["{}: {}", &editor.text.get_text_type(), &editor.text.file_path]
+                        format!["{}: {}", &utils::get_lang_name(&editor.text), &editor.text.file_path]
                     };
 
                 let mut n_iter = lines_ui.graphemes(true);
@@ -500,7 +514,7 @@ fn main() {
                 while n != None {
                     let f_s = editor.text.font_size;
 
-                    let texture = editor.text.get_normal_char(n.unwrap(), &texture_creator);
+                    let texture = editor.text.get_normal_char(n.unwrap(), &texture_creator, 255, 255, 255);
                     let texture_info = texture.query();
 
                     editor.canvas.copy(texture, None, Some(rect![x, w_height-f_s as u32, texture_info.width, texture_info.height])).unwrap();

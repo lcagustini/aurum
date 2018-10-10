@@ -6,6 +6,10 @@ authors = ["lcagustini <torresmon235@gmail.com>"]
 [dependencies]
 unicode-segmentation = "*"
 nfd = "*"
+serde_derive = "*"
+serde_json = "*"
+serde = "*"
+regex = "*"
 
 [dependencies.sdl2]
 git = "https://github.com/AngryLawyer/rust-sdl2"
