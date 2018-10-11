@@ -15,6 +15,7 @@ macro_rules! color(($r:expr, $g:expr, $b:expr) => (Color::RGB($r as u8, $g as u8
 struct SyntaxJSON {
     c_constant: u32,
     c_keyword: u32,
+    c_secondary_word: u32,
     c_preproc: u32,
     c_data_type: u32,
     c_comment: u32,
@@ -22,6 +23,7 @@ struct SyntaxJSON {
 
     s_constant: String,
     s_keyword: String,
+    s_secondary_word: String,
     s_preproc: String,
     s_data_type: String,
     s_comment: String,
@@ -31,6 +33,7 @@ struct SyntaxJSON {
 pub struct SyntaxColor {
     pub constant: Color,
     pub keyword: Color,
+    pub secondary_word: Color,
     pub preproc: Color,
     pub data_type: Color,
     pub comment: Color,
@@ -41,6 +44,7 @@ pub struct SyntaxColor {
 pub struct SyntaxStructs {
     pub constant: regex::Regex,
     pub keyword: regex::Regex,
+    pub secondary_word: regex::Regex,
     pub preproc: regex::Regex,
     pub data_type: regex::Regex,
     pub comment: regex::Regex,
@@ -63,6 +67,7 @@ impl SyntaxHandler {
                     structs: SyntaxStructs {
                         constant: regex::Regex::new(&decoded.s_constant).unwrap(),
                         keyword: regex::Regex::new(&decoded.s_keyword).unwrap(),
+                        secondary_word: regex::Regex::new(&decoded.s_secondary_word).unwrap(),
                         preproc: regex::Regex::new(&decoded.s_preproc).unwrap(),
                         data_type: regex::Regex::new(&decoded.s_data_type).unwrap(),
                         comment: regex::Regex::new(&decoded.s_comment).unwrap(),
@@ -70,6 +75,7 @@ impl SyntaxHandler {
                     colors: SyntaxColor {
                         constant: color![decoded.c_constant & 0xFF, (decoded.c_constant >> 8) & 0xFF, (decoded.c_constant >> 16) & 0xFF],
                         keyword: color![decoded.c_keyword & 0xFF, (decoded.c_keyword >> 8) & 0xFF, (decoded.c_keyword >> 16) & 0xFF],
+                        secondary_word: color![decoded.c_secondary_word & 0xFF, (decoded.c_secondary_word >> 8) & 0xFF, (decoded.c_secondary_word >> 16) & 0xFF],
                         preproc: color![decoded.c_preproc & 0xFF, (decoded.c_preproc >> 8) & 0xFF, (decoded.c_preproc >> 16) & 0xFF],
                         data_type: color![decoded.c_data_type & 0xFF, (decoded.c_data_type >> 8) & 0xFF, (decoded.c_data_type >> 16) & 0xFF],
                         comment: color![decoded.c_comment & 0xFF, (decoded.c_comment >> 8) & 0xFF, (decoded.c_comment >> 16) & 0xFF],
@@ -97,6 +103,7 @@ impl SyntaxHandler {
                 let mut c_iter = line.graphemes(true);
                 let mut m_iter_vec = vec![structs.constant.find_iter(line),
                                           structs.keyword.find_iter(line),
+                                          structs.secondary_word.find_iter(line),
                                           structs.preproc.find_iter(line),
                                           structs.data_type.find_iter(line),
                                           structs.comment.find_iter(line)];
@@ -105,7 +112,8 @@ impl SyntaxHandler {
                                      m_iter_vec[1].next(),
                                      m_iter_vec[2].next(),
                                      m_iter_vec[3].next(),
-                                     m_iter_vec[4].next()];
+                                     m_iter_vec[4].next(),
+                                     m_iter_vec[5].next()];  
 
                 for c in c_iter {
                     let mut cur_color = 10;
@@ -128,9 +136,10 @@ impl SyntaxHandler {
                     match cur_color {
                         0 => ret.push(colors.constant),
                         1 => ret.push(colors.keyword),
-                        2 => ret.push(colors.preproc),
-                        3 => ret.push(colors.data_type),
-                        4 => ret.push(colors.comment),
+                        2 => ret.push(colors.secondary_word),
+                        3 => ret.push(colors.preproc),
+                        4 => ret.push(colors.data_type),
+                        5 => ret.push(colors.comment),
                         _ => ret.push(colors.other),
                     }
 
@@ -148,3 +157,6 @@ impl SyntaxHandler {
         return ret;
     }
 }
+
+
+

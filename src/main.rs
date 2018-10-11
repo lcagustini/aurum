@@ -97,6 +97,9 @@ fn main() {
                                     let path = format!["{}/langs/{}/syntax", env::current_dir().unwrap().display(), text_type];
                                     editor.syntax_handler = syntax::SyntaxHandler::parse_syntax_file(&path);
                                 }
+                                else {
+                                    editor.syntax_handler = None;
+                                }
 
                                 editor.text.needs_update = true;
                             },
@@ -533,3 +536,4 @@ fn main() {
         editor.text.needs_update = false;
     }
 }
+
