@@ -116,7 +116,7 @@ impl SyntaxHandler {
                                 if m.start() <= cur_x && cur_x < m.end() {
                                     cur_color = i;
                                 }
-                                else if cur_x >= m.end() {
+                                if cur_x == m.end()-1 {
                                     m_vec[i] = m_iter_vec[i].next();
                                 }
                             },

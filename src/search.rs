@@ -10,14 +10,27 @@ impl SearchHandler {
         SearchHandler{active: false, search_string: "".to_owned(), cur_index: 0, found_places: Vec::new()}
     }
 
+    fn recursive_find(slice: &str, searching: &str, bias: usize) -> Vec<usize> {
+        let r = slice.find(searching);
+        match r {
+            Some(x) => {
+                let mut vec = Self::recursive_find(&slice[x+1..], searching, bias+x+1);
+                vec.push(x+bias);
+                return vec;
+            },
+            None => return Vec::new()
+        }
+    }
+
     pub fn find_search_string(&mut self, text: &Vec<String>) {
         self.found_places.clear();
         self.cur_index = 0;
-        for (y, line) in text.iter().enumerate() {
-            let r = line.find(&self.search_string);
-            match r {
-                Some(x) => self.found_places.push((x as u32, y as u32)),
-                _ => ()
+        if self.search_string.len() > 0 {
+            for (y, line) in text.iter().enumerate() {
+                let vec = Self::recursive_find(line, &self.search_string, 0);
+                for x in vec {
+                    self.found_places.push((x as u32, y as u32));
+                }
             }
         }
     }

@@ -228,6 +228,7 @@ fn main() {
                 Event::KeyDown { keycode: Some(Keycode::Backspace), .. } => {
                     if editor.search_handler.active {
                         editor.search_handler.search_string.pop();
+                        editor.search_handler.find_search_string(&editor.text.raw);
                     }
                     else {
                         if editor.cursor.x > 0 {
