@@ -113,7 +113,7 @@ impl SyntaxHandler {
                                      m_iter_vec[2].next(),
                                      m_iter_vec[3].next(),
                                      m_iter_vec[4].next(),
-                                     m_iter_vec[5].next()];  
+                                     m_iter_vec[5].next()];
 
                 for c in c_iter {
                     let mut cur_color = 10;

@@ -29,6 +29,7 @@ mod undo;
 mod search;
 mod editor;
 mod syntax;
+mod autocomplete;
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -83,6 +84,10 @@ fn main() {
                             nfd::Response::Okay(file_path) => {
                                 editor.text.raw = utils::read_file(&file_path).split("\n").map(|x| x.to_owned()).collect();
                                 editor.text.file_path = file_path;
+
+                                for line in &editor.text.raw {
+                                    editor.completion_engine.update_cache(line);
+                                }
 
                                 editor.cursor.x = 0;
                                 editor.cursor.wanted_x = 0;
@@ -144,6 +149,14 @@ fn main() {
                     }
                 },
 
+
+                Event::KeyDown { keycode: Some(Keycode::P), keymod, .. } => {
+                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                        let complete_list = editor.completion_engine.complete(&editor);
+                        println!["{:?}", complete_list];
+                    }
+                },
+
                 Event::KeyDown { keycode: Some(Keycode::F), keymod, .. } => {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
                         editor.search_handler.active = !editor.search_handler.active;
@@ -166,12 +179,16 @@ fn main() {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
                         if !editor.search_handler.active {
                             let input: Vec<String> = video_subsystem.clipboard().clipboard_text().unwrap().split("\n").map(|x| x.to_owned()).collect();
+                            let len = input.len();
 
-                            for line in input {
+                            for (i, line) in input.iter().enumerate() {
                                 editor.text.raw[editor.cursor.get_absolute_y()].insert_str(editor.cursor.x as usize, &line);
-                                editor.text.raw.insert(editor.cursor.get_absolute_y()+1, "".to_owned());
-                                editor.cursor.x += line.len() as u32;
-                                editor.cursor.down(&editor.text.raw, &editor.canvas);
+
+                                if i < len-1 {
+                                    editor.text.raw.insert(editor.cursor.get_absolute_y()+1, "".to_owned());
+                                    editor.cursor.x += line.len() as u32;
+                                    editor.cursor.down(&editor.text.raw, &editor.canvas);
+                                }
                             }
                             editor.undo_handler.create_state(&editor.cursor, &editor.text);
                             editor.text.needs_update = true;
@@ -216,7 +233,7 @@ fn main() {
                             space_string.push(' ');
                         };
 
-                        space_string.insert_str(0, &halves[1]);
+                        space_string.push_str(&halves[1]);
                         editor.text.raw.insert((editor.cursor.get_absolute_y()+1) as usize, space_string);
 
                         editor.cursor.x = space_amount as u32;
