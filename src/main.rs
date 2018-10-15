@@ -58,21 +58,25 @@ fn main() {
 
                 Event::KeyDown { keycode: Some(Keycode::Left), .. } => {
                     editor.cursor.left(&editor.text.raw);
+                    editor.completion_engine.list_mode = false;
                     editor.text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Right), .. } => {
                     editor.cursor.right(&editor.text.raw);
+                    editor.completion_engine.list_mode = false;
                     editor.text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Up), .. } => {
                     editor.cursor.up(&editor.text.raw, &editor.canvas);
+                    editor.completion_engine.list_mode = false;
                     editor.text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Down), .. } => {
                     editor.cursor.down(&editor.text.raw, &editor.canvas);
+                    editor.completion_engine.list_mode = false;
                     editor.text.needs_update = true;
                 },
 
@@ -152,8 +156,27 @@ fn main() {
 
                 Event::KeyDown { keycode: Some(Keycode::P), keymod, .. } => {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
-                        let complete_list = editor.completion_engine.complete(&editor);
-                        println!["{:?}", complete_list];
+                        if editor.completion_engine.list_mode {
+                            editor.completion_engine.selected_word += 1;
+                            if editor.completion_engine.selected_word >= editor.completion_engine.completion_list.len() {
+                                editor.completion_engine.selected_word = 0;
+                            }
+                        }
+                        else {
+                            editor.completion_engine.complete(&editor.text.raw, &editor.cursor);
+                            if editor.completion_engine.completion_list.len() == 1 {
+                                let complete = &editor.completion_engine.completion_list[0][editor.completion_engine.cur_word.len()..];
+
+                                editor.text.raw[editor.cursor.get_absolute_y()].insert_str(editor.cursor.x as usize, &complete);
+                                editor.cursor.x += complete.len() as u32;
+                            }
+                            else {
+                                editor.completion_engine.selected_word = 0;
+                                editor.completion_engine.list_mode = true;
+                            }
+                        }
+
+                        editor.text.needs_update = true;
                     }
                 },
 
@@ -220,26 +243,35 @@ fn main() {
                         }
                     }
                     else {
-                        editor.text.raw[editor.cursor.get_absolute_y()].insert_str(editor.cursor.x as usize, "\n");
+                        if editor.completion_engine.list_mode {
+                            let complete = &editor.completion_engine.completion_list[editor.completion_engine.selected_word][editor.completion_engine.cur_word.len()..];
 
-                        let halves: Vec<String> = editor.text.raw[editor.cursor.get_absolute_y()].split("\n").map(|x| x.to_owned()).collect();
+                            editor.text.raw[editor.cursor.get_absolute_y()].insert_str(editor.cursor.x as usize, &complete);
+                            editor.cursor.x += complete.len() as u32;
 
-                        editor.text.raw[editor.cursor.get_absolute_y()] = halves[0].clone();
+                            editor.completion_engine.list_mode = false;
+                        }
+                        else {
+                            editor.text.raw[editor.cursor.get_absolute_y()].insert_str(editor.cursor.x as usize, "\n");
 
-                        let space_amount = halves[0].len() - halves[0].trim_left().len();
-                        let mut space_string = "".to_owned();
+                            let halves: Vec<String> = editor.text.raw[editor.cursor.get_absolute_y()].split("\n").map(|x| x.to_owned()).collect();
 
-                        for _ in 0..space_amount {
-                            space_string.push(' ');
-                        };
+                            editor.text.raw[editor.cursor.get_absolute_y()] = halves[0].clone();
 
-                        space_string.push_str(&halves[1]);
-                        editor.text.raw.insert((editor.cursor.get_absolute_y()+1) as usize, space_string);
+                            let space_amount = halves[0].len() - halves[0].trim_left().len();
+                            let mut space_string = "".to_owned();
 
-                        editor.cursor.x = space_amount as u32;
-                        editor.cursor.wanted_x = 0;
-                        editor.cursor.y += 1;
+                            for _ in 0..space_amount {
+                                space_string.push(' ');
+                            };
 
+                            space_string.push_str(&halves[1]);
+                            editor.text.raw.insert((editor.cursor.get_absolute_y()+1) as usize, space_string);
+
+                            editor.cursor.x = space_amount as u32;
+                            editor.cursor.wanted_x = 0;
+                            editor.cursor.y += 1;
+                        }
                         editor.undo_handler.create_state(&editor.cursor, &editor.text);
                     }
                     editor.text.needs_update = true;
@@ -254,6 +286,9 @@ fn main() {
                         if editor.cursor.x > 0 {
                             editor.cursor.left(&editor.text.raw);
                             editor.text.raw[editor.cursor.get_absolute_y()].remove(editor.cursor.x as usize);
+                            if editor.completion_engine.list_mode {
+                                editor.completion_engine.complete(&editor.text.raw, &editor.cursor);
+                            }
                         }
                         else if editor.cursor.x == 0 && editor.cursor.get_absolute_y() > 0 {
                             let line = editor.text.raw[editor.cursor.get_absolute_y()].clone();
@@ -271,6 +306,8 @@ fn main() {
                             else {
                                 editor.cursor.y -= 1;
                             }
+
+                            editor.completion_engine.list_mode = false;
                         }
                     }
                     editor.text.needs_update = true;
@@ -281,6 +318,9 @@ fn main() {
                         let input = "    ";
                         editor.text.raw[editor.cursor.get_absolute_y()].insert_str(editor.cursor.x as usize, input);
                         editor.cursor.x += input.len() as u32;
+
+                        editor.completion_engine.list_mode = false;
+
                         editor.text.needs_update = true;
                     }
                 },
@@ -293,6 +333,13 @@ fn main() {
                     else {
                         editor.text.raw[editor.cursor.get_absolute_y()].insert_str(editor.cursor.x as usize, &input);
                         editor.cursor.x += input.len() as u32;
+
+                        if editor.completion_engine.list_mode {
+                            editor.completion_engine.complete(&editor.text.raw, &editor.cursor);
+                            if editor.completion_engine.completion_list.len() == 0 {
+                                editor.completion_engine.list_mode = false;
+                            }
+                        }
                     }
                     editor.text.needs_update = true;
                 },
@@ -478,6 +525,36 @@ fn main() {
             }
         }
 
+        //Draw autocomplete options
+        {
+            if editor.completion_engine.list_mode {
+                let x;
+                {
+                    let (half, _) = editor.text.raw[editor.cursor.get_absolute_y()].split_at(editor.cursor.x as usize);
+                    let (temp_x, _) = editor.text.font.size_of(half).unwrap();
+
+                    x = temp_x + editor.cursor.number_w;
+                }
+                let mut y = editor.cursor.y*(editor.text.font_size as u32);
+
+                editor.canvas.set_draw_color(BAR_COLOR);
+                editor.canvas.fill_rect(rect![x, y, 200, editor.completion_engine.completion_list.len()*(editor.text.font_size as usize)]).unwrap();
+
+                for word in &editor.completion_engine.completion_list {
+                    let mut c_x = x;
+                    let mut iter = word.graphemes(true);
+                    for c in iter {
+                        let texture = editor.text.get_normal_char(c, &texture_creator, 255, 255, 255);
+                        let texture_info = texture.query();
+
+                        editor.canvas.copy(texture, None, Some(rect![c_x, y, texture_info.width, texture_info.height])).unwrap();
+                        c_x += texture_info.width;
+                    }
+                    y += editor.text.font_size as u32;
+                }
+            }
+        }
+
         //Draw cursor
         {
             editor.text.font.set_style(sdl2::ttf::STYLE_NORMAL);
@@ -486,7 +563,12 @@ fn main() {
 
             let texture = texture_creator.create_texture_from_surface(&editor.cursor.surface).unwrap();
 
-            editor.canvas.copy(&texture, None, Some(rect![x+editor.cursor.number_w, editor.cursor.y*(editor.text.font_size as u32), CURSOR_WIDTH, editor.text.font_size])).unwrap();
+            if editor.completion_engine.list_mode {
+                editor.canvas.copy(&texture, None, Some(rect![x+editor.cursor.number_w, (editor.cursor.y + editor.completion_engine.selected_word as u32)*(editor.text.font_size as u32), CURSOR_WIDTH, editor.text.font_size])).unwrap();
+            }
+            else {
+                editor.canvas.copy(&texture, None, Some(rect![x+editor.cursor.number_w, editor.cursor.y*(editor.text.font_size as u32), CURSOR_WIDTH, editor.text.font_size])).unwrap();
+            }
         }
 
         //Draw statusbar
