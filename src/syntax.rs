@@ -9,17 +9,15 @@ use sdl2::pixels::Color;
 
 use unicode_segmentation::UnicodeSegmentation;
 
-macro_rules! color(($r:expr, $g:expr, $b:expr) => (Color::RGB($r as u8, $g as u8, $b as u8)));
-
 #[derive(Debug, Serialize, Deserialize)]
 struct SyntaxJSON {
-    c_constant: u32,
-    c_keyword: u32,
-    c_secondary_word: u32,
-    c_preproc: u32,
-    c_data_type: u32,
-    c_comment: u32,
-    c_other: u32,
+    c_constant: [u8; 3],
+    c_keyword: [u8; 3],
+    c_secondary_word: [u8; 3],
+    c_preproc: [u8; 3],
+    c_data_type: [u8; 3],
+    c_comment: [u8; 3],
+    c_other: [u8; 3],
 
     s_constant: String,
     s_keyword: String,
@@ -73,13 +71,13 @@ impl SyntaxHandler {
                         comment: regex::Regex::new(&decoded.s_comment).unwrap(),
                     },
                     colors: SyntaxColor {
-                        constant: color![decoded.c_constant & 0xFF, (decoded.c_constant >> 8) & 0xFF, (decoded.c_constant >> 16) & 0xFF],
-                        keyword: color![decoded.c_keyword & 0xFF, (decoded.c_keyword >> 8) & 0xFF, (decoded.c_keyword >> 16) & 0xFF],
-                        secondary_word: color![decoded.c_secondary_word & 0xFF, (decoded.c_secondary_word >> 8) & 0xFF, (decoded.c_secondary_word >> 16) & 0xFF],
-                        preproc: color![decoded.c_preproc & 0xFF, (decoded.c_preproc >> 8) & 0xFF, (decoded.c_preproc >> 16) & 0xFF],
-                        data_type: color![decoded.c_data_type & 0xFF, (decoded.c_data_type >> 8) & 0xFF, (decoded.c_data_type >> 16) & 0xFF],
-                        comment: color![decoded.c_comment & 0xFF, (decoded.c_comment >> 8) & 0xFF, (decoded.c_comment >> 16) & 0xFF],
-                        other: color![decoded.c_other & 0xFF, (decoded.c_other >> 8) & 0xFF, (decoded.c_other >> 16) & 0xFF],
+                        constant: color![decoded.c_constant[0], decoded.c_constant[1], decoded.c_constant[2]],
+                        keyword: color![decoded.c_keyword[0], decoded.c_keyword[1], decoded.c_keyword[2]],
+                        secondary_word: color![decoded.c_secondary_word[0], decoded.c_secondary_word[1], decoded.c_secondary_word[2]],
+                        preproc: color![decoded.c_preproc[0], decoded.c_preproc[1], decoded.c_preproc[2]],
+                        data_type: color![decoded.c_data_type[0], decoded.c_data_type[1], decoded.c_data_type[2]],
+                        comment: color![decoded.c_comment[0], decoded.c_comment[1], decoded.c_comment[2]],
+                        other: color![decoded.c_other[0], decoded.c_other[1], decoded.c_other[2]],
                     }
                 })
             },

@@ -3,7 +3,6 @@ extern crate unicode_segmentation;
 extern crate nfd;
 #[macro_use] extern crate serde_derive;
 
-use sdl2::pixels::Color;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 
@@ -12,14 +11,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use std::env;
 
 macro_rules! rect(($x:expr, $y:expr, $w:expr, $h:expr) => (sdl2::rect::Rect::new($x as i32, $y as i32, $w as u32, $h as u32)));
-
-const BG_COLOR: Color = Color{r: 25, g: 25, b: 25, a: 255};
-const BAR_COLOR: Color = Color{r: 15, g: 15, b: 15, a: 255};
-const SELECT_COLOR: Color = Color{r: 255, g: 255, b: 255, a: 255};
-const SEARCH_COLOR: Color = Color{r: 255, g: 255, b: 30, a: 255};
-
-const FONT_SIZE: u16 = 18;
-const CURSOR_WIDTH: u32 = 8;
+macro_rules! color(($r:expr, $g:expr, $b:expr) => (Color::RGB($r as u8, $g as u8, $b as u8)));
 
 mod utils;
 mod text;
@@ -30,6 +22,7 @@ mod search;
 mod editor;
 mod syntax;
 mod autocomplete;
+mod config;
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -47,7 +40,9 @@ fn main() {
     let canvas = window.into_canvas().build().unwrap();
     let texture_creator = canvas.texture_creator();
 
-    let mut editor = editor::Editor::create(canvas, &ttf_context);
+    let config = config::Config::load_config("config.json");
+
+    let mut editor = editor::Editor::create(canvas, &ttf_context, &config);
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -69,13 +64,13 @@ fn main() {
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Up), .. } => {
-                    editor.cursor.up(&editor.text.raw, &editor.canvas);
+                    editor.cursor.up(&editor.text.raw, &editor.canvas, &config);
                     editor.completion_engine.list_mode = false;
                     editor.text.needs_update = true;
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Down), .. } => {
-                    editor.cursor.down(&editor.text.raw, &editor.canvas);
+                    editor.cursor.down(&editor.text.raw, &editor.canvas, &config);
                     editor.completion_engine.list_mode = false;
                     editor.text.needs_update = true;
                 },
@@ -210,7 +205,7 @@ fn main() {
                                 if i < len-1 {
                                     editor.text.raw.insert(editor.cursor.get_absolute_y()+1, "".to_owned());
                                     editor.cursor.x += line.len() as u32;
-                                    editor.cursor.down(&editor.text.raw, &editor.canvas);
+                                    editor.cursor.down(&editor.text.raw, &editor.canvas, &config);
                                 }
                             }
                             editor.undo_handler.create_state(&editor.cursor, &editor.text);
@@ -224,11 +219,11 @@ fn main() {
                         match editor.search_handler.next_string_pos() {
                             Some((x, y)) => {
                                 while editor.cursor.get_absolute_y() > y as usize {
-                                    editor.cursor.up(&editor.text.raw, &editor.canvas);
+                                    editor.cursor.up(&editor.text.raw, &editor.canvas, &config);
                                 }
 
                                 while editor.cursor.get_absolute_y() < y as usize {
-                                    editor.cursor.down(&editor.text.raw, &editor.canvas);
+                                    editor.cursor.down(&editor.text.raw, &editor.canvas, &config);
                                 }
 
                                 while editor.cursor.x > x {
@@ -345,7 +340,7 @@ fn main() {
                 },
 
                 Event::MouseWheel { y: dir, .. } => {
-                    editor.cursor.scroll_screen(&editor.canvas, &editor.text.raw, dir);
+                    editor.cursor.scroll_screen(&editor.canvas, &editor.text.raw, dir, &config);
                     editor.text.needs_update = true;
                 },
 
@@ -353,7 +348,7 @@ fn main() {
                     match button {
                         sdl2::mouse::MouseButton::Left => {
                             let n_w = editor.cursor.number_w;
-                            editor.cursor.move_to(x, y, n_w, &texture_creator, &mut editor.text);
+                            editor.cursor.move_to(x, y, n_w, &texture_creator, &mut editor.text, &config);
                         },
                         _ => {},
                     }
@@ -366,7 +361,7 @@ fn main() {
 
                             {
                                 let n_w = editor.cursor.number_w;
-                                editor.cursor.move_to(x, y, n_w, &texture_creator, &mut editor.text);
+                                editor.cursor.move_to(x, y, n_w, &texture_creator, &mut editor.text, &config);
                             }
 
                             if old_x < editor.cursor.x {
@@ -414,7 +409,7 @@ fn main() {
 
             continue;
         }
-        editor.canvas.set_draw_color(BG_COLOR);
+        editor.canvas.set_draw_color(config.bg_color);
         editor.canvas.clear();
 
         let (w_width, w_height) = editor.canvas.window().size();
@@ -483,7 +478,7 @@ fn main() {
                     };
                 let (x2, _) = editor.text.font.size_of(half).unwrap();
 
-                editor.canvas.set_draw_color(SELECT_COLOR);
+                editor.canvas.set_draw_color(config.select_color);
                 if editor.selected.y1 == editor.selected.y2 {
                     editor.canvas.draw_rect(rect![x1+editor.cursor.number_w, (editor.selected.y1 as isize - editor.cursor.screen_y as isize)*editor.text.font_size as isize, x2-x1, editor.text.font_size]).unwrap();
                 }
@@ -518,7 +513,7 @@ fn main() {
                         let (x1, _) = editor.text.font.size_of(half).unwrap();
                         let (w, _) = editor.text.font.size_of(&editor.search_handler.search_string).unwrap();
 
-                        editor.canvas.set_draw_color(SEARCH_COLOR);
+                        editor.canvas.set_draw_color(config.search_color);
                         editor.canvas.draw_rect(rect![x1+editor.cursor.number_w, (y-editor.cursor.screen_y)*editor.text.font_size as u32, w, editor.text.font_size]).unwrap();
                     }
                 }
@@ -537,7 +532,7 @@ fn main() {
                 }
                 let mut y = editor.cursor.y*(editor.text.font_size as u32);
 
-                editor.canvas.set_draw_color(BAR_COLOR);
+                editor.canvas.set_draw_color(config.bar_color);
                 editor.canvas.fill_rect(rect![x, y, 200, editor.completion_engine.completion_list.len()*(editor.text.font_size as usize)]).unwrap();
 
                 for word in &editor.completion_engine.completion_list {
@@ -564,16 +559,16 @@ fn main() {
             let texture = texture_creator.create_texture_from_surface(&editor.cursor.surface).unwrap();
 
             if editor.completion_engine.list_mode {
-                editor.canvas.copy(&texture, None, Some(rect![x+editor.cursor.number_w, (editor.cursor.y + editor.completion_engine.selected_word as u32)*(editor.text.font_size as u32), CURSOR_WIDTH, editor.text.font_size])).unwrap();
+                editor.canvas.copy(&texture, None, Some(rect![x+editor.cursor.number_w, (editor.cursor.y + editor.completion_engine.selected_word as u32)*(editor.text.font_size as u32), config.cursor_width, editor.text.font_size])).unwrap();
             }
             else {
-                editor.canvas.copy(&texture, None, Some(rect![x+editor.cursor.number_w, editor.cursor.y*(editor.text.font_size as u32), CURSOR_WIDTH, editor.text.font_size])).unwrap();
+                editor.canvas.copy(&texture, None, Some(rect![x+editor.cursor.number_w, editor.cursor.y*(editor.text.font_size as u32), config.cursor_width, editor.text.font_size])).unwrap();
             }
         }
 
         //Draw statusbar
         {
-            editor.canvas.set_draw_color(BAR_COLOR);
+            editor.canvas.set_draw_color(config.bar_color);
             editor.canvas.fill_rect(rect![0, w_height - editor.text.font_size as u32, w_width, editor.text.font_size]).unwrap();
 
             //Right aligned
@@ -635,4 +630,6 @@ fn main() {
         editor.text.needs_update = false;
     }
 }
+
+
 

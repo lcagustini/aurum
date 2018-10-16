@@ -1,0 +1,13 @@
+{
+    "bg_color": [25, 25, 25],
+    "bar_color": [15, 15, 15],
+    "select_color": [255, 255, 255],
+    "search_color": [255, 255, 30],
+
+    "cursor_width": 8,
+
+    "font_path": "roboto.ttf",
+    "font_size": 18
+}
+
+
