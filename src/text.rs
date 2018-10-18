@@ -28,7 +28,7 @@ impl<'ttf, 'a> Text<'ttf, 'a> {
         Text { font: font, font_size: config.font_size, raw: raw, file_path: "".to_owned(), normal_character_cache: HashMap::new(), bold_character_cache: HashMap::new(), needs_update: true }
     }
 
-    pub fn get_bold_char(&mut self, character: &str, texture_creator: &'a TextureCreator<WindowContext>) -> &Texture {
+    pub fn get_bold_char(&mut self, character: &str, texture_creator: &'a TextureCreator<WindowContext>, color: &sdl2::pixels::Color) -> &Texture {
         if !self.bold_character_cache.contains_key(character) {
             self.font.set_style(sdl2::ttf::STYLE_BOLD);
 
@@ -38,10 +38,16 @@ impl<'ttf, 'a> Text<'ttf, 'a> {
             self.bold_character_cache.insert(character.to_owned(), texture);
         }
 
+        {
+            let t = self.bold_character_cache.get_mut(character).unwrap();
+            let (r, g, b) = color.rgb();
+            t.set_color_mod(r, g, b);
+        }
+
         self.bold_character_cache.get(character).unwrap()
     }
 
-    pub fn get_normal_char(&mut self, character: &str, texture_creator: &'a TextureCreator<WindowContext>, r: u8, g: u8, b: u8) -> &Texture {
+    pub fn get_normal_char(&mut self, character: &str, texture_creator: &'a TextureCreator<WindowContext>, color: &sdl2::pixels::Color) -> &Texture {
         if !self.normal_character_cache.contains_key(character) {
             self.font.set_style(sdl2::ttf::STYLE_NORMAL);
 
@@ -53,6 +59,7 @@ impl<'ttf, 'a> Text<'ttf, 'a> {
 
         {
             let t = self.normal_character_cache.get_mut(character).unwrap();
+            let (r, g, b) = color.rgb();
             t.set_color_mod(r, g, b);
         }
 

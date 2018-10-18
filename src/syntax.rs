@@ -4,6 +4,7 @@ extern crate regex;
 
 use ::utils;
 use ::editor;
+use ::config;
 
 use sdl2::pixels::Color;
 
@@ -11,14 +12,6 @@ use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SyntaxJSON {
-    c_constant: [u8; 3],
-    c_keyword: [u8; 3],
-    c_secondary_word: [u8; 3],
-    c_preproc: [u8; 3],
-    c_data_type: [u8; 3],
-    c_comment: [u8; 3],
-    c_other: [u8; 3],
-
     s_constant: String,
     s_keyword: String,
     s_secondary_word: String,
@@ -39,19 +32,13 @@ pub struct SyntaxColor {
 }
 
 #[derive(Debug)]
-pub struct SyntaxStructs {
+pub struct SyntaxHandler {
     pub constant: regex::Regex,
     pub keyword: regex::Regex,
     pub secondary_word: regex::Regex,
     pub preproc: regex::Regex,
     pub data_type: regex::Regex,
     pub comment: regex::Regex,
-}
-
-#[derive(Debug)]
-pub struct SyntaxHandler {
-    pub structs: SyntaxStructs,
-    pub colors: SyntaxColor,
 }
 impl SyntaxHandler {
     pub fn parse_syntax_file(path: &str) -> Option<SyntaxHandler> {
@@ -62,23 +49,12 @@ impl SyntaxHandler {
         match decoded {
             Ok(decoded) => {
                 return Some(SyntaxHandler {
-                    structs: SyntaxStructs {
-                        constant: regex::Regex::new(&decoded.s_constant).unwrap(),
-                        keyword: regex::Regex::new(&decoded.s_keyword).unwrap(),
-                        secondary_word: regex::Regex::new(&decoded.s_secondary_word).unwrap(),
-                        preproc: regex::Regex::new(&decoded.s_preproc).unwrap(),
-                        data_type: regex::Regex::new(&decoded.s_data_type).unwrap(),
-                        comment: regex::Regex::new(&decoded.s_comment).unwrap(),
-                    },
-                    colors: SyntaxColor {
-                        constant: color![decoded.c_constant[0], decoded.c_constant[1], decoded.c_constant[2]],
-                        keyword: color![decoded.c_keyword[0], decoded.c_keyword[1], decoded.c_keyword[2]],
-                        secondary_word: color![decoded.c_secondary_word[0], decoded.c_secondary_word[1], decoded.c_secondary_word[2]],
-                        preproc: color![decoded.c_preproc[0], decoded.c_preproc[1], decoded.c_preproc[2]],
-                        data_type: color![decoded.c_data_type[0], decoded.c_data_type[1], decoded.c_data_type[2]],
-                        comment: color![decoded.c_comment[0], decoded.c_comment[1], decoded.c_comment[2]],
-                        other: color![decoded.c_other[0], decoded.c_other[1], decoded.c_other[2]],
-                    }
+                    constant: regex::Regex::new(&decoded.s_constant).unwrap(),
+                    keyword: regex::Regex::new(&decoded.s_keyword).unwrap(),
+                    secondary_word: regex::Regex::new(&decoded.s_secondary_word).unwrap(),
+                    preproc: regex::Regex::new(&decoded.s_preproc).unwrap(),
+                    data_type: regex::Regex::new(&decoded.s_data_type).unwrap(),
+                    comment: regex::Regex::new(&decoded.s_comment).unwrap(),
                 })
             },
             Err(e) => {
@@ -88,13 +64,12 @@ impl SyntaxHandler {
         }
     }
 
-    pub fn get_line_color(line: &str, editor: &editor::Editor) -> Vec<Color> {
+    pub fn get_line_color(line: &str, editor: &editor::Editor, config: &config::Config) -> Vec<Color> {
         let mut ret: Vec<Color> = Vec::new();
 
         match &editor.syntax_handler {
-            Some(sh) => {
-                let colors = &sh.colors;
-                let structs = &sh.structs;
+            Some(structs) => {
+                let colors = &config.syntax_color;
 
                 let mut cur_x = 0;
 

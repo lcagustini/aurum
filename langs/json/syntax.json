@@ -1,0 +1,9 @@
+{
+    "s_constant": "(?i)\\b\\d+\\.\\d*\\b|\\b\\d+\\b|\\btrue\\b|\\bfalse\\b|\".*\"|'.+'",
+    "s_keyword": "\"\\w*\"\\s*:",
+    "s_secondary_word": "a^",
+    "s_preproc": "\\{|\\}|\\[|\\]",
+    "s_data_type": "a^",
+    "s_comment": "a^"
+}
+

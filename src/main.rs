@@ -11,7 +11,9 @@ use unicode_segmentation::UnicodeSegmentation;
 use std::env;
 
 macro_rules! rect(($x:expr, $y:expr, $w:expr, $h:expr) => (sdl2::rect::Rect::new($x as i32, $y as i32, $w as u32, $h as u32)));
-macro_rules! color(($r:expr, $g:expr, $b:expr) => (Color::RGB($r as u8, $g as u8, $b as u8)));
+macro_rules! color(($a:expr) => (Color::RGB($a[0] as u8, $a[1] as u8, $a[2] as u8)));
+
+const WHITE: sdl2::pixels::Color = sdl2::pixels::Color {r: 255, g: 255, b: 255, a: 255};
 
 mod utils;
 mod text;
@@ -98,7 +100,7 @@ fn main() {
 
                                 let text_type = editor.text.get_text_type();
                                 if text_type != "?" {
-                                    let path = format!["{}/langs/{}/syntax", env::current_dir().unwrap().display(), text_type];
+                                    let path = format!["{}/langs/{}/syntax.json", env::current_dir().unwrap().display(), text_type];
                                     editor.syntax_handler = syntax::SyntaxHandler::parse_syntax_file(&path);
                                 }
                                 else {
@@ -179,6 +181,8 @@ fn main() {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
                         editor.search_handler.active = !editor.search_handler.active;
                         editor.search_handler.search_string.clear();
+
+                        editor.selected.reset_selection();
 
                         editor.text.needs_update = true;
                     }
@@ -267,7 +271,9 @@ fn main() {
                             editor.cursor.wanted_x = 0;
                             editor.cursor.y += 1;
                         }
+
                         editor.undo_handler.create_state(&editor.cursor, &editor.text);
+                        editor.selected.reset_selection();
                     }
                     editor.text.needs_update = true;
                 },
@@ -304,6 +310,8 @@ fn main() {
 
                             editor.completion_engine.list_mode = false;
                         }
+
+                        editor.selected.reset_selection();
                     }
                     editor.text.needs_update = true;
                 },
@@ -335,6 +343,8 @@ fn main() {
                                 editor.completion_engine.list_mode = false;
                             }
                         }
+
+                        editor.selected.reset_selection();
                     }
                     editor.text.needs_update = true;
                 },
@@ -424,15 +434,29 @@ fn main() {
                     (editor.cursor.screen_y + editor.canvas.window().size().1/editor.text.font_size as u32) as usize
                 };
 
+            let digits = utils::number_of_digits(editor.text.raw.len());
+            {
+                let max_number = format!["{:1$} ", editor.text.raw.len(), digits];
+
+                editor.text.font.set_style(sdl2::ttf::STYLE_BOLD);
+                let (x, _) = editor.text.font.size_of(&max_number).unwrap();
+                editor.cursor.number_w = x;
+                editor.text.font.set_style(sdl2::ttf::STYLE_NORMAL);
+
+                editor.canvas.set_draw_color(config.bar_color);
+                editor.canvas.fill_rect(rect![0, 0, x, w_height]).unwrap();
+            }
+
             for i in (editor.cursor.screen_y as usize)..screen_limit {
+                //Draw line number
                 let mut x = 0;
                 let y = editor.text.font_size*((i-editor.cursor.screen_y as usize) as u16);
 
-                let number = format!["{:1$} ", i+1, utils::number_of_digits(editor.text.raw.len())];
+                let number = format!["{:1$} ", i+1, digits];
                 let mut n_iter = number.graphemes(true);
                 let mut n = n_iter.next();
                 while n != None {
-                    let texture = editor.text.get_bold_char(n.unwrap(), &texture_creator);
+                    let texture = editor.text.get_bold_char(n.unwrap(), &texture_creator, &config.line_number_color);
                     let texture_info = texture.query();
 
                     editor.canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
@@ -441,17 +465,15 @@ fn main() {
                     n = n_iter.next()
                 }
 
-                editor.cursor.number_w = x;
-
+                //Draw line text
                 let line = editor.text.raw[i].clone();
 
-                let mut colors = syntax::SyntaxHandler::get_line_color(&line, &editor).into_iter();
+                let mut colors = syntax::SyntaxHandler::get_line_color(&line, &editor, &config).into_iter();
 
                 let mut c_iter = line.graphemes(true);
                 let mut c = c_iter.next();
                 while c != None {
-                    let (r, g, b) = colors.next().unwrap().rgb();
-                    let texture = editor.text.get_normal_char(c.unwrap(), &texture_creator, r, g, b);
+                    let texture = editor.text.get_normal_char(c.unwrap(), &texture_creator, &colors.next().unwrap());
                     let texture_info = texture.query();
 
                     editor.canvas.copy(texture, None, Some(rect![x, y, texture_info.width, texture_info.height])).unwrap();
@@ -539,7 +561,7 @@ fn main() {
                     let mut c_x = x;
                     let mut iter = word.graphemes(true);
                     for c in iter {
-                        let texture = editor.text.get_normal_char(c, &texture_creator, 255, 255, 255);
+                        let texture = editor.text.get_normal_char(c, &texture_creator, &WHITE);
                         let texture_info = texture.query();
 
                         editor.canvas.copy(texture, None, Some(rect![c_x, y, texture_info.width, texture_info.height])).unwrap();
@@ -580,7 +602,7 @@ fn main() {
                 while n != None {
                     let f_s = editor.text.font_size;
 
-                    let texture = editor.text.get_normal_char(n.unwrap(), &texture_creator, 255, 255, 255);
+                    let texture = editor.text.get_normal_char(n.unwrap(), &texture_creator, &WHITE);
                     let texture_info = texture.query();
 
                     editor.canvas.copy(&texture, None, Some(rect![x, w_height-f_s as u32, texture_info.width, texture_info.height])).unwrap();
@@ -613,7 +635,7 @@ fn main() {
                 while n != None {
                     let f_s = editor.text.font_size;
 
-                    let texture = editor.text.get_normal_char(n.unwrap(), &texture_creator, 255, 255, 255);
+                    let texture = editor.text.get_normal_char(n.unwrap(), &texture_creator, &WHITE);
                     let texture_info = texture.query();
 
                     editor.canvas.copy(texture, None, Some(rect![x, w_height-f_s as u32, texture_info.width, texture_info.height])).unwrap();

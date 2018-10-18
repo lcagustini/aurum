@@ -1,13 +1,5 @@
 {
-    "c_constant": [0,0,255],
-    "c_keyword": [255,0,0],
-    "c_secondary_word": [255,100,0],
-    "c_preproc": [255,255,0],
-    "c_data_type": [255,0,255],
-    "c_comment": [150,150,150],
-    "c_other": [255,255,255],
-
-    "s_constant": "(?i)\\b\\d+\\.\\d*[fd]*\\b|\\b\\d+\\b|\\btrue\\b|\\bfalse\\b|\".*\"|'.+'",
+    "s_constant": "(?i)\\b\\d+\\.\\d*[fd]*\\b|\\b\\d+\\b|\\btrue\\b|\\bfalse\\b|\"[^\"]+\"|'.+'",
     "s_keyword": "\\bpublic\\b|\\bclass\\b|\\bbreak\\b|\\bcase\\b|\\bconst\\b|\\bcontinue\\b|\\bdefault\\b|\\bdo\\b|\\belse\\b|\\benum\\b|\\bextern\\b|\\bfor\\b|\\bgoto\\b|\\bif\\b|\\binline\\b|\\breturn\\b|\\bsizeof\\b|\\bstatic\\b|\\bstruct\\b|\\bswitch\\b|\\btypedef\\b|\\bunion\\b|\\bvolatile\\b|\\bwhile\\b",
     "s_secondary_word": "a^",
     "s_preproc": "^\\s*#.*",

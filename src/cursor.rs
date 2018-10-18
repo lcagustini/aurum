@@ -122,7 +122,7 @@ impl<'r> Cursor<'r> {
                 }
 
                 let cur = c.unwrap();
-                let texture = text.get_normal_char(&cur, &texture_creator, 255, 255, 255);
+                let texture = text.get_normal_char(&cur, &texture_creator, &::WHITE);
                 let texture_info = texture.query();
 
                 width += texture_info.width;
