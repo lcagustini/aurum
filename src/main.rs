@@ -9,7 +9,6 @@ use sdl2::keyboard::Keycode;
 use unicode_segmentation::UnicodeSegmentation;
 
 use std::env;
-use std::process::Command;
 
 macro_rules! rect(($x:expr, $y:expr, $w:expr, $h:expr) => (sdl2::rect::Rect::new($x as i32, $y as i32, $w as u32, $h as u32)));
 macro_rules! color(($a:expr) => (Color::RGB($a[0] as u8, $a[1] as u8, $a[2] as u8)));
@@ -79,13 +78,9 @@ fn main() {
                     editor.text.needs_update = true;
                 },
 
-                Event::KeyDown { keycode: Some(Keycode::R), keymod, .. } => {
+                Event::KeyDown { keycode: Some(Keycode::N), keymod, .. } => {
                     if keymod.contains(sdl2::keyboard::LCTRLMOD) {
-                        let _child = Command::new("make")
-                            .arg("-C")
-                            .arg(editor.text.get_text_dir())
-                            .spawn()
-                            .expect("failed to execute process");
+                        editor = editor::Editor::create(editor.canvas, &ttf_context, &config);
                     }
                 },
 
@@ -596,10 +591,10 @@ fn main() {
             let texture = texture_creator.create_texture_from_surface(&editor.cursor.surface).unwrap();
 
             if editor.completion_engine.list_mode {
-                editor.canvas.copy(&texture, None, Some(rect![x+editor.cursor.number_w, (editor.cursor.y + editor.completion_engine.selected_word as u32)*(editor.text.font_size as u32), config.cursor_width, editor.text.font_size])).unwrap();
+                editor.canvas.copy(&texture, None, Some(rect![1+x+editor.cursor.number_w, (editor.cursor.y + editor.completion_engine.selected_word as u32)*(editor.text.font_size as u32), config.cursor_width, editor.text.font_size])).unwrap();
             }
             else {
-                editor.canvas.copy(&texture, None, Some(rect![x+editor.cursor.number_w, editor.cursor.y*(editor.text.font_size as u32), config.cursor_width, editor.text.font_size])).unwrap();
+                editor.canvas.copy(&texture, None, Some(rect![1+x+editor.cursor.number_w, editor.cursor.y*(editor.text.font_size as u32), config.cursor_width, editor.text.font_size])).unwrap();
             }
         }
 

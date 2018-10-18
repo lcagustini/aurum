@@ -21,7 +21,9 @@ pub struct Editor<'ttf, 'r> {
     pub canvas: sdl2::render::Canvas<sdl2::video::Window>,
 }
 impl<'ttf, 'r> Editor<'ttf, 'r> {
-    pub fn create(canvas: sdl2::render::Canvas<sdl2::video::Window>, ttf_context: &'ttf sdl2::ttf::Sdl2TtfContext, config: &config::Config) -> Editor<'ttf, 'r> {
+    pub fn create(canvas: sdl2::render::Canvas<sdl2::video::Window>,
+                  ttf_context: &'ttf sdl2::ttf::Sdl2TtfContext,
+                  config: &config::Config) -> Editor<'ttf, 'r> {
         let mut font = ttf_context.load_font(&config.font_path, config.font_size).unwrap();
         font.set_style(sdl2::ttf::STYLE_NORMAL);
 
@@ -39,4 +41,5 @@ impl<'ttf, 'r> Editor<'ttf, 'r> {
         }
     }
 }
+
 

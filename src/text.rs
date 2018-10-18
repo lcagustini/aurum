@@ -67,20 +67,18 @@ impl<'ttf, 'a> Text<'ttf, 'a> {
     }
 
     pub fn get_text_type(&self) -> String {
-        let mut n_iter = self.file_path.graphemes(true).rev();
-        let mut n = n_iter.next();
+        let n_iter = self.file_path.graphemes(true).rev();
         let mut ext = "".to_owned();
-        while n != None {
-            if n.unwrap() == "." {
+        for n in n_iter {
+            if n == "." {
                 return ext;
             }
-            else if n.unwrap() == "/" {
+            else if n == "/" {
                 break;
             }
             else {
-                ext.insert_str(0, n.unwrap());
+                ext.insert_str(0, n);
             }
-            n = n_iter.next();
         }
         return "?".to_owned();
     }
