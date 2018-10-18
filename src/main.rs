@@ -9,9 +9,11 @@ use sdl2::keyboard::Keycode;
 use unicode_segmentation::UnicodeSegmentation;
 
 use std::env;
+use std::process::Command;
 
 macro_rules! rect(($x:expr, $y:expr, $w:expr, $h:expr) => (sdl2::rect::Rect::new($x as i32, $y as i32, $w as u32, $h as u32)));
 macro_rules! color(($a:expr) => (Color::RGB($a[0] as u8, $a[1] as u8, $a[2] as u8)));
+macro_rules! color_a(($a:expr, $alpha:expr) => (Color::RGBA($a[0] as u8, $a[1] as u8, $a[2] as u8, $alpha)));
 
 const WHITE: sdl2::pixels::Color = sdl2::pixels::Color {r: 255, g: 255, b: 255, a: 255};
 
@@ -75,6 +77,16 @@ fn main() {
                     editor.cursor.down(&editor.text.raw, &editor.canvas, &config);
                     editor.completion_engine.list_mode = false;
                     editor.text.needs_update = true;
+                },
+
+                Event::KeyDown { keycode: Some(Keycode::R), keymod, .. } => {
+                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                        let _child = Command::new("make")
+                            .arg("-C")
+                            .arg(editor.text.get_text_dir())
+                            .spawn()
+                            .expect("failed to execute process");
+                    }
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::O), keymod, .. } => {
@@ -485,8 +497,8 @@ fn main() {
         }
 
         //Draw text selection
-        // TODO: transparent selection box
         {
+            editor.canvas.set_blend_mode(sdl2::render::BlendMode::Blend);
             if editor.selected.x1 != editor.selected.x2 || editor.selected.y1 != editor.selected.y2 {
                 let (half, _) = editor.text.raw[editor.selected.y1].split_at(editor.selected.x1);
                 let (x1, _) = editor.text.font.size_of(half).unwrap();
@@ -502,7 +514,7 @@ fn main() {
 
                 editor.canvas.set_draw_color(config.select_color);
                 if editor.selected.y1 == editor.selected.y2 {
-                    editor.canvas.draw_rect(rect![x1+editor.cursor.number_w, (editor.selected.y1 as isize - editor.cursor.screen_y as isize)*editor.text.font_size as isize, x2-x1, editor.text.font_size]).unwrap();
+                    editor.canvas.fill_rect(rect![x1+editor.cursor.number_w, (editor.selected.y1 as isize - editor.cursor.screen_y as isize)*editor.text.font_size as isize, x2-x1, editor.text.font_size]).unwrap();
                 }
                 else {
                     for i in editor.selected.y1..=editor.selected.y2 {
@@ -520,14 +532,16 @@ fn main() {
                         else {
                             end += all;
                         }
-                        editor.canvas.draw_rect(rect![start, (i as isize - editor.cursor.screen_y as isize)*editor.text.font_size as isize, end-start, editor.text.font_size]).unwrap();
+                        editor.canvas.fill_rect(rect![start, (i as isize - editor.cursor.screen_y as isize)*editor.text.font_size as isize, end-start, editor.text.font_size]).unwrap();
                     }
                 }
             }
+            editor.canvas.set_blend_mode(sdl2::render::BlendMode::None);
         }
 
         //Draw search highlight
         {
+            editor.canvas.set_blend_mode(sdl2::render::BlendMode::Blend);
             if editor.search_handler.active {
                 for (x, y) in &editor.search_handler.found_places {
                     if y.clone() >= editor.cursor.screen_y {
@@ -536,10 +550,11 @@ fn main() {
                         let (w, _) = editor.text.font.size_of(&editor.search_handler.search_string).unwrap();
 
                         editor.canvas.set_draw_color(config.search_color);
-                        editor.canvas.draw_rect(rect![x1+editor.cursor.number_w, (y-editor.cursor.screen_y)*editor.text.font_size as u32, w, editor.text.font_size]).unwrap();
+                        editor.canvas.fill_rect(rect![x1+editor.cursor.number_w, (y-editor.cursor.screen_y)*editor.text.font_size as u32, w, editor.text.font_size]).unwrap();
                     }
                 }
             }
+            editor.canvas.set_blend_mode(sdl2::render::BlendMode::None);
         }
 
         //Draw autocomplete options

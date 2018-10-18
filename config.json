@@ -1,20 +1,20 @@
 {
-    "syntax_constant_color": [0,100,255],
-    "syntax_keyword_color": [255,0,0],
-    "syntax_secondary_word_color": [255,100,0],
-    "syntax_preproc_color": [255,255,0],
-    "syntax_data_type_color": [255,0,255],
-    "syntax_comment_color": [150,150,150],
-    "syntax_other_color": [255,255,255],
+    "syntax_constant_color": [153,204,153],
+    "syntax_keyword_color": [204,153,204],
+    "syntax_secondary_word_color": [102,153,204],
+    "syntax_preproc_color": [242,119,122],
+    "syntax_data_type_color": [249,145,87],
+    "syntax_comment_color": [153,153,153],
+    "syntax_other_color": [204,204,204],
 
-    "bg_color": [25, 25, 25],
+    "bg_color": [45, 45, 45],
     "line_number_color": [255, 255, 255],
 
-    "bar_color": [15, 15, 15],
+    "bar_color": [0, 0, 0],
     "bar_text_color": [255, 255, 255],
 
-    "select_color": [255, 255, 255],
-    "search_color": [255, 255, 30],
+    "select_color": [181, 181, 181],
+    "search_color": [255, 204, 102],
 
     "cursor_width": 8,
 

@@ -74,8 +74,8 @@ impl Config {
                     bar_color: color![decoded.bar_color],
                     bar_text_color: color![decoded.bar_text_color],
 
-                    select_color: color![decoded.select_color],
-                    search_color: color![decoded.search_color],
+                    select_color: color_a![decoded.select_color, 120],
+                    search_color: color_a![decoded.search_color, 120],
 
                     cursor_width: decoded.cursor_width as u32,
 
