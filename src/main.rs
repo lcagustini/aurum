@@ -264,8 +264,12 @@ fn main() {
 
                             editor.text.raw[editor.cursor.get_absolute_y()] = halves[0].clone();
 
-                            let space_amount = halves[0].len() - halves[0].trim_left().len();
+                            let mut space_amount = halves[0].len() - halves[0].trim_left().len();
                             let mut space_string = "".to_owned();
+
+                            if editor.text.raw[editor.cursor.get_absolute_y()].trim().ends_with("{") {
+                                space_amount += 4;
+                            }
 
                             for _ in 0..space_amount {
                                 space_string.push(' ');
@@ -292,10 +296,20 @@ fn main() {
                     }
                     else {
                         if editor.cursor.x > 0 {
-                            editor.cursor.left(&editor.text.raw);
-                            editor.text.raw[editor.cursor.get_absolute_y()].remove(editor.cursor.x as usize);
-                            if editor.completion_engine.list_mode {
-                                editor.completion_engine.complete(&editor.text.raw, &editor.cursor);
+                            let amount =
+                                if editor.text.raw[editor.cursor.get_absolute_y()].ends_with("    ") {
+                                    4
+                                }
+                                else {
+                                    1
+                                };
+
+                            for _ in 0..amount {
+                                editor.cursor.left(&editor.text.raw);
+                                editor.text.raw[editor.cursor.get_absolute_y()].remove(editor.cursor.x as usize);
+                                if editor.completion_engine.list_mode {
+                                    editor.completion_engine.complete(&editor.text.raw, &editor.cursor);
+                                }
                             }
                         }
                         else if editor.cursor.x == 0 && editor.cursor.get_absolute_y() > 0 {
