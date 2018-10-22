@@ -2,8 +2,10 @@
     "s_constant": "\\b\\d+\\.\\d*[fd]*\\b|\\b\\d+\\b|\\btrue\\b|\\bfalse\\b|\"[^\"]+\"|'\\w{0,2}'",
     "s_keyword": "\\bas\\b|\\bbreak\\b|\\bconst\\b|\\bcontinue\\b|\\bcrate\\b|\\belse\\b|\\benum\\b|\\bextern\\b|\\bfn\\b|\\bfor\\b|\\bif\\b|\\bimpl\\b|\\bin\\b|\\blet\\b|\\bloop\\b|\\bmatch\\b|\\bmod\\b|\\bmove\\b|\\bpub\\b|\\bref\\b|\\breturn\\b|\\bSelf\\b|\\bstatic\\b|\\bstruct\\b|\\bsuper\\b|\\btrait\\b|\\btype\\b|\\bunsafe\\b|\\buse\\b|\\bwhere\\b|\\bwhile\\b",
     "s_secondary_word": "\\bself\\b|\\bSome\\b|\\bNone\\b|\\bVec\\b|\\bString\\b|\\bOk\\b|\\bErr\\b",
-    "s_preproc": "\\bmut\\b|^#\\[.*\\]|\\b\\w+!|\\$\\w+|&|'\\w+",
+    "s_preproc": "\\bmut\\b|^#\\[.*\\]|\\b\\w+!|\\$\\w+|\\||&|'\\w+",
     "s_data_type": "\\bstr\\b|\\bbool\\b|\\bchar\\b|\\bi8\\b|\\bi16\\b|\\bi32\\b|\\bi64\\b|\\bisize\\b|\\bu8\\b|\\bu16\\b|\\bu32\\b|\\bu64\\b|\\busize\\b|\\bf32\\b|\\bf64\\b|\\b\\w*::\\b",
     "s_comment": "//.*"
 }
+
+
 

@@ -3,6 +3,7 @@ use std::fs::File;
 use std::env;
 
 use ::text;
+use ::editor;
 
 pub fn read_file(path: &str) -> String {
     let file = File::open(path);
@@ -54,4 +55,14 @@ pub fn get_lang_name(text: &text::Text) -> String {
         let path = format!["{}/langs/{}/name", env::current_dir().unwrap().display(), text_type];
         return read_file(&path).trim().to_owned();
     }
+}
+
+pub fn update_timer(editor: &mut editor::Editor) {
+    editor.undo_handler.create_state(&editor.cursor, &editor.text);
+
+    for line in &editor.text.raw {
+        editor.completion_engine.update_cache(line);
+    }
+
+    editor.char_timer = 0;
 }

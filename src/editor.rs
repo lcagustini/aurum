@@ -19,6 +19,7 @@ pub struct Editor<'ttf, 'r> {
     pub completion_engine: autocomplete::CompletionEngine,
 
     pub canvas: sdl2::render::Canvas<sdl2::video::Window>,
+    pub char_timer: usize,
 }
 impl<'ttf, 'r> Editor<'ttf, 'r> {
     pub fn create(canvas: sdl2::render::Canvas<sdl2::video::Window>,
@@ -38,6 +39,7 @@ impl<'ttf, 'r> Editor<'ttf, 'r> {
             syntax_handler: None,
             completion_engine: autocomplete::CompletionEngine::new(),
             canvas: canvas,
+            char_timer: 0,
         }
     }
 }

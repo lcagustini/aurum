@@ -93,17 +93,13 @@ fn main() {
                                 editor.text.raw = utils::read_file(&file_path).split("\n").map(|x| x.to_owned()).collect();
                                 editor.text.file_path = file_path;
 
-                                for line in &editor.text.raw {
-                                    editor.completion_engine.update_cache(line);
-                                }
-
                                 editor.cursor.x = 0;
                                 editor.cursor.wanted_x = 0;
                                 editor.cursor.screen_y = 0;
                                 editor.cursor.y = 0;
 
                                 editor.undo_handler.clear_states();
-                                editor.undo_handler.create_state(&editor.cursor, &editor.text);
+                                utils::update_timer(&mut editor);
 
                                 let text_type = editor.text.get_text_type();
                                 if text_type != "?" {
@@ -133,6 +129,15 @@ fn main() {
                                 nfd::Response::Okay(file_path) => {
                                     utils::save_file(&file_path, &editor.text.raw);
                                     editor.text.file_path = file_path;
+
+                                    let text_type = editor.text.get_text_type();
+                                    if text_type != "?" {
+                                        let path = format!["{}/langs/{}/syntax.json", env::current_dir().unwrap().display(), text_type];
+                                        editor.syntax_handler = syntax::SyntaxHandler::parse_syntax_file(&path);
+                                    }
+                                    else {
+                                        editor.syntax_handler = None;
+                                    }
 
                                     editor.text.needs_update = true;
                                 },
@@ -219,7 +224,7 @@ fn main() {
                                     editor.cursor.down(&editor.text.raw, &editor.canvas, &config);
                                 }
                             }
-                            editor.undo_handler.create_state(&editor.cursor, &editor.text);
+                            utils::update_timer(&mut editor);
                             editor.text.needs_update = true;
                         }
                     }
@@ -283,7 +288,7 @@ fn main() {
                             editor.cursor.y += 1;
                         }
 
-                        editor.undo_handler.create_state(&editor.cursor, &editor.text);
+                        utils::update_timer(&mut editor);
                         editor.selected.reset_selection();
                     }
                     editor.text.needs_update = true;
@@ -295,41 +300,64 @@ fn main() {
                         editor.search_handler.find_search_string(&editor.text.raw);
                     }
                     else {
-                        if editor.cursor.x > 0 {
-                            let amount =
-                                if editor.text.raw[editor.cursor.get_absolute_y()].ends_with("    ") {
-                                    4
-                                }
-                                else {
-                                    1
-                                };
+                        // FIXME: This crashes sometimes
+                        if editor.selected.y1 != editor.selected.y2 || editor.selected.x1 != editor.selected.x2 {
+                            let mut new_line = editor.text.raw[editor.selected.y1][..editor.selected.x1].to_owned();
+                            new_line.push_str(&editor.text.raw[editor.selected.y2][editor.selected.x2..]);
 
-                            for _ in 0..amount {
-                                editor.cursor.left(&editor.text.raw);
-                                editor.text.raw[editor.cursor.get_absolute_y()].remove(editor.cursor.x as usize);
+                            if editor.selected.y1 == editor.selected.y2 {
+                                editor.text.raw[editor.selected.y1] = new_line;
+                            }
+                            else {
+                                for i in (editor.selected.y1..=editor.selected.y2).rev() {
+                                    editor.text.raw.remove(i);
+                                }
+                                editor.text.raw.insert(editor.selected.y1, new_line);
+                            }
+
+                            editor.cursor.y = editor.selected.y1 as u32 - editor.cursor.screen_y;
+                            editor.cursor.x = editor.selected.x1 as u32;
+                            editor.cursor.wanted_x = editor.selected.x1 as u32;
+
+                            utils::update_timer(&mut editor);
+                        }
+                        else {
+                            if editor.cursor.x > 0 {
+                                let amount =
+                                    if editor.text.raw[editor.cursor.get_absolute_y()].ends_with("    ") {
+                                        4
+                                    }
+                                    else {
+                                        1
+                                    };
+
+                                for _ in 0..amount {
+                                    editor.cursor.left(&editor.text.raw);
+                                    editor.text.raw[editor.cursor.get_absolute_y()].remove(editor.cursor.x as usize);
+                                }
                                 if editor.completion_engine.list_mode {
                                     editor.completion_engine.complete(&editor.text.raw, &editor.cursor);
                                 }
                             }
-                        }
-                        else if editor.cursor.x == 0 && editor.cursor.get_absolute_y() > 0 {
-                            let line = editor.text.raw[editor.cursor.get_absolute_y()].clone();
+                            else if editor.cursor.x == 0 && editor.cursor.get_absolute_y() > 0 {
+                                let line = editor.text.raw[editor.cursor.get_absolute_y()].clone();
 
-                            editor.cursor.x = editor.text.raw[editor.cursor.get_absolute_y()-1].len() as u32;
-                            editor.cursor.wanted_x = editor.cursor.x;
+                                editor.cursor.x = editor.text.raw[editor.cursor.get_absolute_y()-1].len() as u32;
+                                editor.cursor.wanted_x = editor.cursor.x;
 
-                            editor.text.raw[editor.cursor.get_absolute_y()-1].push_str(&line);
+                                editor.text.raw[editor.cursor.get_absolute_y()-1].push_str(&line);
 
-                            editor.text.raw.remove(editor.cursor.get_absolute_y());
+                                editor.text.raw.remove(editor.cursor.get_absolute_y());
 
-                            if editor.cursor.y == 0 {
-                                editor.cursor.screen_y -= 1;
+                                if editor.cursor.y == 0 {
+                                    editor.cursor.screen_y -= 1;
+                                }
+                                else {
+                                    editor.cursor.y -= 1;
+                                }
+
+                                editor.completion_engine.list_mode = false;
                             }
-                            else {
-                                editor.cursor.y -= 1;
-                            }
-
-                            editor.completion_engine.list_mode = false;
                         }
 
                         editor.selected.reset_selection();
@@ -366,6 +394,8 @@ fn main() {
                         }
 
                         editor.selected.reset_selection();
+
+                        editor.char_timer += 1;
                     }
                     editor.text.needs_update = true;
                 },
@@ -378,8 +408,7 @@ fn main() {
                 Event::MouseButtonDown { mouse_btn: button, x, y, .. } => {
                     match button {
                         sdl2::mouse::MouseButton::Left => {
-                            let n_w = editor.cursor.number_w;
-                            editor.cursor.move_to(x, y, n_w, &texture_creator, &mut editor.text, &config);
+                            editor.cursor.move_to(x, y, &texture_creator, &mut editor.text, &config);
                         },
                         _ => {},
                     }
@@ -390,27 +419,21 @@ fn main() {
                         sdl2::mouse::MouseButton::Left => {
                             let (old_x, old_y) = (editor.cursor.x, editor.cursor.get_absolute_y());
 
-                            {
-                                let n_w = editor.cursor.number_w;
-                                editor.cursor.move_to(x, y, n_w, &texture_creator, &mut editor.text, &config);
-                            }
-
-                            if old_x < editor.cursor.x {
-                                editor.selected.x1 = old_x as usize;
-                                editor.selected.x2 = editor.cursor.x as usize;
-                            }
-                            else {
-                                editor.selected.x2 = old_x as usize;
-                                editor.selected.x1 = editor.cursor.x as usize;
-                            }
+                            editor.cursor.move_to(x, y, &texture_creator, &mut editor.text, &config);
 
                             if old_y < editor.cursor.get_absolute_y() {
                                 editor.selected.y1 = old_y as usize;
+                                editor.selected.x1 = old_x as usize;
+
                                 editor.selected.y2 = editor.cursor.get_absolute_y() as usize;
+                                editor.selected.x2 = editor.cursor.x as usize;
                             }
                             else {
                                 editor.selected.y1 = editor.cursor.get_absolute_y() as usize;
+                                editor.selected.x1 = editor.cursor.x as usize;
+
                                 editor.selected.y2 = old_y as usize;
+                                editor.selected.x2 = old_x as usize;
                             }
 
                             editor.text.needs_update = true;
@@ -432,6 +455,10 @@ fn main() {
         }
 
         if !editor.text.needs_update {
+            if editor.char_timer > 60 {
+                utils::update_timer(&mut editor);
+            }
+
             let display_index = editor.canvas.window().display_index().unwrap();
             let display_mode = video_subsystem.current_display_mode(display_index).unwrap();
             let frame_time = 1.0/display_mode.refresh_rate as f64;
@@ -676,6 +703,3 @@ fn main() {
         editor.text.needs_update = false;
     }
 }
-
-
-
