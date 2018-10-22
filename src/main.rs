@@ -631,6 +631,11 @@ fn main() {
 
             let texture = texture_creator.create_texture_from_surface(&editor.cursor.surface).unwrap();
 
+            editor.canvas.set_blend_mode(sdl2::render::BlendMode::Blend);
+            editor.canvas.set_draw_color(sdl2::pixels::Color::RGBA(255, 255, 255, 15));
+            editor.canvas.fill_rect(rect!(editor.cursor.number_w, editor.cursor.y * editor.text.font_size as u32, w_width - editor.cursor.number_w, editor.text.font_size)).unwrap();
+            editor.canvas.set_blend_mode(sdl2::render::BlendMode::None);
+
             if editor.completion_engine.list_mode {
                 editor.canvas.copy(&texture, None, Some(rect![1+x+editor.cursor.number_w, (editor.cursor.y + editor.completion_engine.selected_word as u32)*(editor.text.font_size as u32), config.cursor_width, editor.text.font_size])).unwrap();
             }
