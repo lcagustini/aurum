@@ -28,6 +28,7 @@ pub fn save_file(path: &str, buffer: &Vec<String>) {
         s.push_str(l);
         s.push_str("\n");
     }
+    s.pop();
 
     let result = file.write(&s.into_bytes());
     match result {

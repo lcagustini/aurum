@@ -33,7 +33,7 @@ impl<'ttf, 'r> Editor<'ttf, 'r> {
         Editor{
             text: text::Text::new(font, lines, config),
             cursor: cursor::Cursor::new(0, 0, config),
-            selected: select::SelectHandler{x1: 0, y1: 0, x2: 0, y2: 0},
+            selected: select::SelectHandler{old_x: 0, old_y: 0, x1: 0, y1: 0, x2: 0, y2: 0},
             undo_handler: undo::UndoHandler::new(),
             search_handler: search::SearchHandler::new(),
             syntax_handler: None,

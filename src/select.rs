@@ -1,6 +1,9 @@
 use ::text;
 
 pub struct SelectHandler {
+    pub old_x: usize,
+    pub old_y: usize,
+
     pub x1: usize,
     pub y1: usize,
     pub x2: usize,

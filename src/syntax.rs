@@ -130,6 +130,3 @@ impl SyntaxHandler {
         return ret;
     }
 }
-
-
-

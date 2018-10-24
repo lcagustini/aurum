@@ -409,6 +409,15 @@ fn main() {
                     match button {
                         sdl2::mouse::MouseButton::Left => {
                             editor.cursor.move_to(x, y, &texture_creator, &mut editor.text, &config);
+
+                            editor.selected.old_x = editor.cursor.x as usize;
+                            editor.selected.old_y = editor.cursor.get_absolute_y();
+
+                            editor.selected.y1 = editor.cursor.get_absolute_y() as usize;
+                            editor.selected.x1 = editor.cursor.x as usize;
+
+                            editor.selected.y2 = editor.cursor.get_absolute_y() as usize;
+                            editor.selected.x2 = editor.cursor.x as usize;
                         },
                         _ => {},
                     }
@@ -417,13 +426,11 @@ fn main() {
                 Event::MouseButtonUp { mouse_btn: button, x, y, .. } => {
                     match button {
                         sdl2::mouse::MouseButton::Left => {
-                            let (old_x, old_y) = (editor.cursor.x, editor.cursor.get_absolute_y());
-
                             editor.cursor.move_to(x, y, &texture_creator, &mut editor.text, &config);
 
-                            if old_y < editor.cursor.get_absolute_y() {
-                                editor.selected.y1 = old_y as usize;
-                                editor.selected.x1 = old_x as usize;
+                            if editor.selected.old_y < editor.cursor.get_absolute_y() || (editor.selected.old_y == editor.cursor.get_absolute_y() && editor.selected.old_x < editor.cursor.x as usize) {
+                                editor.selected.y1 = editor.selected.old_y as usize;
+                                editor.selected.x1 = editor.selected.old_x as usize;
 
                                 editor.selected.y2 = editor.cursor.get_absolute_y() as usize;
                                 editor.selected.x2 = editor.cursor.x as usize;
@@ -432,13 +439,75 @@ fn main() {
                                 editor.selected.y1 = editor.cursor.get_absolute_y() as usize;
                                 editor.selected.x1 = editor.cursor.x as usize;
 
-                                editor.selected.y2 = old_y as usize;
-                                editor.selected.x2 = old_x as usize;
+                                editor.selected.y2 = editor.selected.old_y as usize;
+                                editor.selected.x2 = editor.selected.old_x as usize;
                             }
 
                             editor.text.needs_update = true;
                         },
                         _ => {},
+                    }
+                },
+
+                Event::MouseMotion { mousestate, x, y, .. } => {
+                    if mousestate.left() {
+                        {
+                            let (_, w_height) = editor.canvas.window().size();
+                            if y > (w_height - 3*config.font_size as u32) as i32 {
+                                editor.cursor.scroll_screen(&editor.canvas, &editor.text.raw, -1, &config);
+                            }
+                            if y < 3*config.font_size as i32 {
+                                editor.cursor.scroll_screen(&editor.canvas, &editor.text.raw, 1, &config);
+                            }
+                        }
+
+                        {
+                            let new_y =
+                                if (y/config.font_size as i32) as u32 + editor.cursor.screen_y < editor.text.raw.len() as u32 {
+                                    (y/config.font_size as i32) as usize + editor.cursor.screen_y as usize
+                                }
+                                else {
+                                    editor.text.raw.len() - 1
+                                };
+                            let new_x = {
+                                let mut width = 0;
+                                let mut len = 0;
+                                let line = editor.text.raw[new_y].clone();
+                                let mut c_iter = line.graphemes(true);
+                                let mut c = c_iter.next();
+                                while c != None {
+                                    if ((x-editor.cursor.number_w as i32)-width as i32) < config.font_size as i32/2 {
+                                        break;
+                                    }
+
+                                    let cur = c.unwrap();
+                                    let texture = editor.text.get_normal_char(&cur, &texture_creator, &::WHITE);
+                                    let texture_info = texture.query();
+
+                                    width += texture_info.width;
+                                    len += cur.len() as u32;
+                                    c = c_iter.next();
+                                }
+                                len
+                            };
+
+                            if editor.selected.old_y < new_y || (editor.selected.old_y == new_y && editor.selected.old_x < new_x as usize) {
+                                editor.selected.y1 = editor.selected.old_y as usize;
+                                editor.selected.x1 = editor.selected.old_x as usize;
+
+                                editor.selected.y2 = new_y;
+                                editor.selected.x2 = new_x as usize;
+                            }
+                            else {
+                                editor.selected.y1 = new_y;
+                                editor.selected.x1 = new_x as usize;
+
+                                editor.selected.y2 = editor.selected.old_y as usize;
+                                editor.selected.x2 = editor.selected.old_x as usize;
+                            }
+                        }
+
+                        editor.text.needs_update = true;
                     }
                 },
 

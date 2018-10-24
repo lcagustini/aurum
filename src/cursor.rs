@@ -110,29 +110,32 @@ impl<'r> Cursor<'r> {
     pub fn move_to(&mut self, x: i32, y: i32, texture_creator: &'r TextureCreator<WindowContext>, text: &mut text::Text<'_, 'r>, config: &config::Config) {
         if (y/config.font_size as i32) as u32 + self.screen_y < text.raw.len() as u32 {
             self.y = (y/config.font_size as i32) as u32;
-
-            let mut width = 0;
-            let mut len = 0;
-            let line = text.raw[self.get_absolute_y()].clone();
-            let mut c_iter = line.graphemes(true);
-            let mut c = c_iter.next();
-            while c != None {
-                if ((x-self.number_w as i32)-width as i32) < config.font_size as i32/2 {
-                    break;
-                }
-
-                let cur = c.unwrap();
-                let texture = text.get_normal_char(&cur, &texture_creator, &::WHITE);
-                let texture_info = texture.query();
-
-                width += texture_info.width;
-                len += cur.len() as u32;
-                c = c_iter.next();
-            }
-            self.x = len;
-            self.wanted_x = len;
-
-            text.needs_update = true;
         }
+        else {
+            self.y = text.raw.len() as u32 - self.screen_y - 1;
+        }
+
+        let mut width = 0;
+        let mut len = 0;
+        let line = text.raw[self.get_absolute_y()].clone();
+        let mut c_iter = line.graphemes(true);
+        let mut c = c_iter.next();
+        while c != None {
+            if ((x-self.number_w as i32)-width as i32) < config.font_size as i32/2 {
+                break;
+            }
+
+            let cur = c.unwrap();
+            let texture = text.get_normal_char(&cur, &texture_creator, &::WHITE);
+            let texture_info = texture.query();
+
+            width += texture_info.width;
+            len += cur.len() as u32;
+            c = c_iter.next();
+        }
+        self.x = len;
+        self.wanted_x = len;
+
+        text.needs_update = true;
     }
 }
