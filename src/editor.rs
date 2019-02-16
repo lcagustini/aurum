@@ -26,7 +26,7 @@ impl<'ttf, 'r> Editor<'ttf, 'r> {
                   ttf_context: &'ttf sdl2::ttf::Sdl2TtfContext,
                   config: &config::Config) -> Editor<'ttf, 'r> {
         let mut font = ttf_context.load_font(&config.font_path, config.font_size).unwrap();
-        font.set_style(sdl2::ttf::STYLE_NORMAL);
+        font.set_style(sdl2::ttf::FontStyle::NORMAL);
 
         let lines: Vec<String> = vec!["".to_owned()];
 

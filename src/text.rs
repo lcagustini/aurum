@@ -30,7 +30,7 @@ impl<'ttf, 'a> Text<'ttf, 'a> {
 
     pub fn get_bold_char(&mut self, character: &str, texture_creator: &'a TextureCreator<WindowContext>, color: &sdl2::pixels::Color) -> &Texture {
         if !self.bold_character_cache.contains_key(character) {
-            self.font.set_style(sdl2::ttf::STYLE_BOLD);
+            self.font.set_style(sdl2::ttf::FontStyle::BOLD);
 
             let surface = self.font.render(character).blended(Color::RGBA(255, 255, 255, 255)).unwrap();
             let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
@@ -49,7 +49,7 @@ impl<'ttf, 'a> Text<'ttf, 'a> {
 
     pub fn get_normal_char(&mut self, character: &str, texture_creator: &'a TextureCreator<WindowContext>, color: &sdl2::pixels::Color) -> &Texture {
         if !self.normal_character_cache.contains_key(character) {
-            self.font.set_style(sdl2::ttf::STYLE_NORMAL);
+            self.font.set_style(sdl2::ttf::FontStyle::NORMAL);
 
             let surface = self.font.render(character).blended(Color::RGBA(255, 255, 255, 255)).unwrap();
             let texture = texture_creator.create_texture_from_surface(&surface).unwrap();

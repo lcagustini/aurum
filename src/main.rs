@@ -79,13 +79,13 @@ fn main() {
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::N), keymod, .. } => {
-                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                    if keymod.contains(sdl2::keyboard::Mod::LCTRLMOD) {
                         editor = editor::Editor::create(editor.canvas, &ttf_context, &config);
                     }
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::O), keymod, .. } => {
-                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                    if keymod.contains(sdl2::keyboard::Mod::LCTRLMOD) {
                         let dir = editor.text.get_text_dir();
                         let result = nfd::open_file_dialog(None, Some(&dir)).unwrap();
                         match result {
@@ -119,7 +119,7 @@ fn main() {
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::S), keymod, .. } => {
-                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                    if keymod.contains(sdl2::keyboard::Mod::LCTRLMOD) {
                         if editor.text.file_path != "" {
                             utils::save_file(&editor.text.file_path, &editor.text.raw);
                         }
@@ -149,14 +149,14 @@ fn main() {
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::Z), keymod, .. } => {
-                    let mut ctrl_shift = sdl2::keyboard::LCTRLMOD;
-                    ctrl_shift.insert(sdl2::keyboard::LSHIFTMOD);
+                    let mut ctrl_shift = sdl2::keyboard::Mod::LCTRLMOD;
+                    ctrl_shift.insert(sdl2::keyboard::Mod::LSHIFTMOD);
 
                     if keymod.contains(ctrl_shift) {
                         editor.undo_handler.restore_next_state(&mut editor.cursor, &mut editor.text);
                         editor.text.needs_update = true;
                     }
-                    else if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                    else if keymod.contains(sdl2::keyboard::Mod::LCTRLMOD) {
                         editor.undo_handler.restore_previous_state(&mut editor.cursor, &mut editor.text);
                         editor.text.needs_update = true;
                     }
@@ -164,7 +164,7 @@ fn main() {
 
 
                 Event::KeyDown { keycode: Some(Keycode::P), keymod, .. } => {
-                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                    if keymod.contains(sdl2::keyboard::Mod::LCTRLMOD) {
                         if editor.completion_engine.list_mode {
                             editor.completion_engine.selected_word += 1;
                             if editor.completion_engine.selected_word >= editor.completion_engine.completion_list.len() {
@@ -190,7 +190,7 @@ fn main() {
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::F), keymod, .. } => {
-                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                    if keymod.contains(sdl2::keyboard::Mod::LCTRLMOD) {
                         editor.search_handler.active = !editor.search_handler.active;
                         editor.search_handler.search_string.clear();
 
@@ -201,7 +201,7 @@ fn main() {
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::C), keymod, .. } => {
-                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                    if keymod.contains(sdl2::keyboard::Mod::LCTRLMOD) {
                         if !editor.search_handler.active {
                             let text = editor.selected.get_selected_text(&editor.text);
                             video_subsystem.clipboard().set_clipboard_text(&text).unwrap();
@@ -210,7 +210,7 @@ fn main() {
                 },
 
                 Event::KeyDown { keycode: Some(Keycode::V), keymod, .. } => {
-                    if keymod.contains(sdl2::keyboard::LCTRLMOD) {
+                    if keymod.contains(sdl2::keyboard::Mod::LCTRLMOD) {
                         if !editor.search_handler.active {
                             let input: Vec<String> = video_subsystem.clipboard().clipboard_text().unwrap().split("\n").map(|x| x.to_owned()).collect();
                             let len = input.len();
@@ -269,7 +269,7 @@ fn main() {
 
                             editor.text.raw[editor.cursor.get_absolute_y()] = halves[0].clone();
 
-                            let mut space_amount = halves[0].len() - halves[0].trim_left().len();
+                            let mut space_amount = halves[0].len() - halves[0].trim_start().len();
                             let mut space_string = "".to_owned();
 
                             if editor.text.raw[editor.cursor.get_absolute_y()].trim().ends_with("{") {
@@ -555,10 +555,10 @@ fn main() {
             {
                 let max_number = format!["{:1$} ", editor.text.raw.len(), digits];
 
-                editor.text.font.set_style(sdl2::ttf::STYLE_BOLD);
+                editor.text.font.set_style(sdl2::ttf::FontStyle::BOLD);
                 let (x, _) = editor.text.font.size_of(&max_number).unwrap();
                 editor.cursor.number_w = x;
-                editor.text.font.set_style(sdl2::ttf::STYLE_NORMAL);
+                editor.text.font.set_style(sdl2::ttf::FontStyle::NORMAL);
 
                 editor.canvas.set_draw_color(config.bar_color);
                 editor.canvas.fill_rect(rect![0, 0, x, w_height]).unwrap();
@@ -694,7 +694,7 @@ fn main() {
 
         //Draw cursor
         {
-            editor.text.font.set_style(sdl2::ttf::STYLE_NORMAL);
+            editor.text.font.set_style(sdl2::ttf::FontStyle::NORMAL);
             let (half, _) = editor.text.raw[editor.cursor.get_absolute_y()].split_at(editor.cursor.x as usize);
             let (x, _) = editor.text.font.size_of(half).unwrap();
 
