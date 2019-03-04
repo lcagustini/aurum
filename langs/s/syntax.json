@@ -1,9 +1,9 @@
 {
-    "s_constant": "[#+\\-*/]?\\b0x[0-9a-fA-F]*\\b|[#+\\-*/]?\\b0b[01]*\\b|[#+\\-*/]?\\b0[0-7]*\\b|[#+\\-*/]?\\b[1-9][0-9]*\\b|\"[^\"]+\"|#\\b\\w+\\b",
+    "s_constant": "[#+\\-*/]?\\b0x[0-9a-fA-F]*\\b|[#+\\-*/]?\\b0b[01]*\\b|[#+\\-*/]?\\b0[0-7]*\\b|[#+\\-*/]?\\b[1-9][0-9]*\\b|\"[^\"]+\"|#[_\\-()\\\\]*\\b[a-zA-Z_\\-()\\\\]+\\b",
     "s_keyword": "(?i)\\badc\\b|\\badd\\b|\\band\\b|\\basr\\b|\\bbic\\b|\\bbl\\b|\\bbx\\b|\\bcmn\\b|\\bcmp\\b|\\beor\\b|\\bldmia\\b|\\bldr\\b|\\bldrb\\b|\\bldrh\\b|\\bldrsb\\b|\\bldrsh\\b|\\blsl\\b|\\blsr\\b|\\bmov\\b|\\bmul\\b|\\bmvn\\b|\\bneg\\b|\\borr\\b|\\bpop\\b|\\bpush\\b|\\bror\\b|\\bsbc\\b|\\bstmia\\b|\\bstr\\b|\\bstrb\\b|\\bstrh\\b|\\bstrsb\\b|\\bstrsh\\b|\\bsub\\b|\\bswi\\b|\\btst\\b|\\bbeq\\b|\\bbne\\b|\\bbcs\\b|\\bbcc\\b|\\bbhs\\b|\\bblo\\b|\\bbmi\\b|\\bbpl\\b|\\bbvs\\b|\\bbvc\\b|\\bbhi\\b|\\bbls\\b|\\bbge\\b|\\bblt\\b|\\bbgt\\b|\\bble\\b|\\bbal\\b|\\bbne\\b|\\bb\\b",
     "s_secondary_word": "(?i)\\br1[0-4]\\b|\\br[0-9]\\b|\\bsp\\b|\\blr\\b|\\bpc\\b|\\bcpsr\\b",
     "s_preproc": "^\\s*\\.[A-Za-z_]+",
-    "s_data_type": "=\\.+|[0-9A-Za-z_\\.]+:",
+    "s_data_type": "=.+|[0-9A-Za-z_\\.\\-\\\\()]+:",
     "s_comment": "@.*"
 }
 

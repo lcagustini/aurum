@@ -272,7 +272,9 @@ fn main() {
                             let mut space_amount = halves[0].len() - halves[0].trim_start().len();
                             let mut space_string = "".to_owned();
 
-                            if editor.text.raw[editor.cursor.get_absolute_y()].trim().ends_with("{") {
+                            if editor.text.raw[editor.cursor.get_absolute_y()].trim().ends_with("{") ||
+                                editor.text.raw[editor.cursor.get_absolute_y()].trim().ends_with(":") ||
+                                editor.text.raw[editor.cursor.get_absolute_y()].trim().ends_with("(") {
                                 space_amount += 4;
                             }
 
