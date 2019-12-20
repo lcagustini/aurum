@@ -3,6 +3,6 @@
     "s_keyword": "\\bbreak\\b|\\bcase\\b|\\bconst\\b|\\bcontinue\\b|\\bdefault\\b|\\bdo\\b|\\belse\\b|\\benum\\b|\\bextern\\b|\\bfor\\b|\\bgoto\\b|\\bif\\b|\\binline\\b|\\breturn\\b|\\bsizeof\\b|\\bstatic\\b|\\bstruct\\b|\\bswitch\\b|\\btypedef\\b|\\bunion\\b|\\bvolatile\\b|\\bwhile\\b",
     "s_secondary_word": "a^",
     "s_preproc": "^\\s*#.*",
-    "s_data_type": "\\bchar\\b|\\bdouble\\b|\\bfloat\\b|\\bint\\b|\\blong\\b|\\bshort\\b|\\bsigned\\b|\\bunsigned\\b|\\bvoid\\b",
+    "s_data_type": "\\bu?int8_t\\b|\\bu?int16_t\\b|\\bu?int64_t\\b|\\bu?int32_t\\b|\\bchar\\b|\\bdouble\\b|\\bfloat\\b|\\bint\\b|\\blong\\b|\\bshort\\b|\\bsigned\\b|\\bunsigned\\b|\\bvoid\\b",
     "s_comment": "//.*"
 }

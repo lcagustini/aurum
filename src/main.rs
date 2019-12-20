@@ -326,7 +326,7 @@ fn main() {
                         else {
                             if editor.cursor.x > 0 {
                                 let amount =
-                                    if editor.text.raw[editor.cursor.get_absolute_y()].ends_with("    ") {
+                                    if editor.text.raw[editor.cursor.get_absolute_y()][..editor.cursor.x as usize].ends_with("    ") {
                                         4
                                     }
                                     else {
